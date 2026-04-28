@@ -496,11 +496,15 @@ if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
 joystickBase.addEventListener('touchstart', (e) => {
     isJoystickTouchActive = true;
     handleJoystick(e.touches[0]);
-});
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
+}, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
     if (isJoystickTouchActive) {
         handleJoystick(e.touches[0]);
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
     }
 }, { passive: false });
 
@@ -550,6 +554,12 @@ function moveAvatar() {
         if (keys['KeyD']) flyDir.add(right);
         if (keys['Space']) flyDir.add(camera.up);
         if (keys['ControlLeft']) flyDir.sub(camera.up);
+
+        // Add Joystick input for ghost mode
+        if (joystickVector.length() > 0.1) {
+            flyDir.addScaledVector(fwd, joystickVector.y);
+            flyDir.addScaledVector(right, joystickVector.x);
+        }
 
         camera.position.addScaledVector(flyDir, flySpeed);
         // Force the controls target to follow the camera so we can continue orbiting from the new position
