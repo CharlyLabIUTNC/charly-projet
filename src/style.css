@@ -86,27 +86,34 @@ p {
   margin: 0;
 }
 
-
-
-#hud {
+#hud-wrapper {
   position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
+  z-index: 100;
+  transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+#hud-wrapper.minimized {
+  transform: translate(-50%, calc(100% - 10px));
+}
+
+#hud {
   display: flex;
   gap: 12px;
   background: rgba(0, 0, 0, 0.6);
   backdrop-filter: blur(15px);
   padding: 12px 20px;
   border-radius: 20px;
-  z-index: 100;
   border: 1px solid rgba(255, 255, 255, 0.15);
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
-  transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s;
   max-width: 95vw;
   flex-wrap: nowrap;
   overflow-x: auto;
-  justify-content: flex-start; /* Start from left to allow scrolling */
   scrollbar-width: none;
 }
 
@@ -114,31 +121,11 @@ p {
   display: none;
 }
 
-#hud.minimized {
-  transform: translate(-50%, calc(100% + 20px));
-  background: transparent;
-  border-color: transparent;
-  box-shadow: none;
-  backdrop-filter: none;
-}
 
-#hud.minimized > *:not(.hud-toggle-btn) {
+#hud-wrapper.minimized #hud {
   opacity: 0;
   pointer-events: none;
 }
-
-#hud.minimized .hud-toggle-btn {
-  pointer-events: auto; /* Keep the toggle clickable */
-}
-
-@media (max-width: 768px) {
-  #hud {
-    gap: 6px;
-    padding: 8px 12px;
-    border-radius: 12px;
-    bottom: 15px;
-    max-width: 90vw;
-  }
   
   .hud-btn {
     padding: 6px 10px;
@@ -149,43 +136,38 @@ p {
 }
 
 .hud-toggle-btn {
-  position: fixed;
-  bottom: 5vw; /* bottom of hud + roughly hud height */
-  left: 50%;
-  transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.5);
   backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-bottom: none;
   color: white;
   width: 40px;
-  height: 25px;
-  border-radius: 12px 12px 0 0;
+  height: 20px;
+  border-radius: 10px 10px 0 0;
   cursor: pointer;
   display: flex;
   justify-content: center;
   align-items: center;
   font-size: 10px;
-  z-index: 101;
-  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+  transition: all 0.3s;
+  margin-bottom: -1px; /* Stitch to HUD */
+}
+
+.hud-toggle-btn.minimized {
+  background: rgba(0, 0, 0, 0.8);
+  margin-bottom: 0;
 }
 
 @media (max-width: 768px) {
-  .hud-toggle-btn {
-    bottom: 9vw; /* mobile bottom + smaller hud height */
+  #hud-wrapper {
+    bottom: 10px;
+  }
+  #hud {
+    gap: 6px;
+    padding: 8px 10px;
+    border-radius: 12px;
   }
 }
-
-/* We need a way to detect minimized state for the fixed button. 
-   I'll update the JS to toggle a class on the button too, or the body. 
-   For now, I'll use the button's own state if possible, but JS is safer. */
-.hud-toggle-btn.minimized {
-  bottom: 0px;
-  background: rgba(0, 0, 0, 0.8);
-}
-
-
-/* Removed old absolute positioning logic */
 
 .hud-toggle-btn:hover {
   background: var(--accent);

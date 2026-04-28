@@ -495,6 +495,7 @@ if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
 
 joystickBase.addEventListener('touchstart', (e) => {
     isJoystickTouchActive = true;
+    controls.enabled = false; // Disable camera orbit while using joystick
     handleJoystick(e.touches[0]);
     e.stopPropagation();
     if (e.cancelable) e.preventDefault();
@@ -510,6 +511,7 @@ window.addEventListener('touchmove', (e) => {
 
 window.addEventListener('touchend', () => {
     isJoystickTouchActive = false;
+    controls.enabled = true; // Re-enable camera orbit
     joystickVector.set(0, 0);
     joystickStick.style.transform = `translate(0, 0)`;
 });
@@ -1125,11 +1127,11 @@ document.getElementById('btn-close-modal').addEventListener('click', () => {
 });
 
 document.getElementById('btn-hud-toggle').addEventListener('click', () => {
-    const hud = document.getElementById('hud');
+    const wrapper = document.getElementById('hud-wrapper');
     const btn = document.getElementById('btn-hud-toggle');
-    hud.classList.toggle('minimized');
+    wrapper.classList.toggle('minimized');
     btn.classList.toggle('minimized');
-    btn.textContent = hud.classList.contains('minimized') ? '▲' : '▼';
+    btn.textContent = wrapper.classList.contains('minimized') ? '▲' : '▼';
 });
 
 document.getElementById('btn-add-box').addEventListener('click', () => {
