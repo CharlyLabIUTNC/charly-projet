@@ -482,6 +482,55 @@ document.addEventListener('keyup', (event) => {
     keys[event.code] = false;
 });
 
+// --- Mobile Joystick Logic ---
+const joystickContainer = document.getElementById('joystick-container');
+const joystickBase = document.getElementById('joystick-base');
+const joystickStick = document.getElementById('joystick-stick');
+let joystickVector = new THREE.Vector2(0, 0);
+let isJoystickTouchActive = false;
+
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    joystickContainer.classList.remove('hidden');
+}
+
+joystickBase.addEventListener('touchstart', (e) => {
+    isJoystickTouchActive = true;
+    handleJoystick(e.touches[0]);
+});
+
+window.addEventListener('touchmove', (e) => {
+    if (isJoystickTouchActive) {
+        handleJoystick(e.touches[0]);
+    }
+}, { passive: false });
+
+window.addEventListener('touchend', () => {
+    isJoystickTouchActive = false;
+    joystickVector.set(0, 0);
+    joystickStick.style.transform = `translate(0, 0)`;
+});
+
+function handleJoystick(touch) {
+    const rect = joystickBase.getBoundingClientRect();
+    const centerX = rect.left + rect.width / 2;
+    const centerY = rect.top + rect.height / 2;
+    const maxDistance = rect.width / 2;
+
+    let dx = touch.clientX - centerX;
+    let dy = touch.clientY - centerY;
+    const distance = Math.sqrt(dx * dx + dy * dy);
+
+    if (distance > maxDistance) {
+        dx = (dx / distance) * maxDistance;
+        dy = (dy / distance) * maxDistance;
+    }
+
+    joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
+    
+    // Normalize vector for movement
+    joystickVector.set(dx / maxDistance, -dy / maxDistance); // Y is inverted in screen space
+}
+
 // keyboard movement function
 function moveAvatar() {
     if (isGhostMode) {
@@ -549,17 +598,29 @@ function moveAvatar() {
     if (keys['KeyA']) moveDirection.sub(right);
     if (keys['KeyD']) moveDirection.add(right);
 
+    // Add Joystick input
+    if (joystickVector.length() > 0.1) {
+        moveDirection.addScaledVector(forward, joystickVector.y);
+        moveDirection.addScaledVector(right, joystickVector.x);
+    }
+
     moveDirection.normalize();
 
     // Calculate rotation offset for strafing (moving left/right)
     let rotationOffset = 0;
-    if (keys['KeyA'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = Math.PI / 2;
-    else if (keys['KeyD'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = -Math.PI / 2;
-    else if (keys['KeyA'] && keys['KeyW']) rotationOffset = Math.PI / 4;
-    else if (keys['KeyD'] && keys['KeyW']) rotationOffset = -Math.PI / 4;
-    else if (keys['KeyA'] && keys['KeyS']) rotationOffset = 3 * Math.PI / 4;
-    else if (keys['KeyD'] && keys['KeyS']) rotationOffset = -3 * Math.PI / 4;
-    else if (keys['KeyS']) rotationOffset = Math.PI;
+    
+    // If using joystick, rotation is directly from vector
+    if (joystickVector.length() > 0.1) {
+        rotationOffset = -Math.atan2(joystickVector.x, joystickVector.y);
+    } else {
+        if (keys['KeyA'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = Math.PI / 2;
+        else if (keys['KeyD'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = -Math.PI / 2;
+        else if (keys['KeyA'] && keys['KeyW']) rotationOffset = Math.PI / 4;
+        else if (keys['KeyD'] && keys['KeyW']) rotationOffset = -Math.PI / 4;
+        else if (keys['KeyA'] && keys['KeyS']) rotationOffset = 3 * Math.PI / 4;
+        else if (keys['KeyD'] && keys['KeyS']) rotationOffset = -3 * Math.PI / 4;
+        else if (keys['KeyS']) rotationOffset = Math.PI;
+    }
 
     // Always rotate avatar to face away from camera (or towards where camera looks)
     // plus the offset to lean into the movement
@@ -1051,6 +1112,14 @@ document.getElementById('btn-add-glb').addEventListener('click', () => {
 
 document.getElementById('btn-close-modal').addEventListener('click', () => {
     document.getElementById('add-glb-modal').classList.add('hidden');
+});
+
+document.getElementById('btn-hud-toggle').addEventListener('click', () => {
+    const hud = document.getElementById('hud');
+    const btn = document.getElementById('btn-hud-toggle');
+    hud.classList.toggle('minimized');
+    btn.classList.toggle('minimized');
+    btn.textContent = hud.classList.contains('minimized') ? '▲' : '▼';
 });
 
 document.getElementById('btn-add-box').addEventListener('click', () => {

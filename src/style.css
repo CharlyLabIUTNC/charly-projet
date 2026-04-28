@@ -89,19 +89,110 @@ p {
 
 
 #hud {
-  position: absolute;
+  position: fixed;
   bottom: 20px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
-  gap: 15px;
-  background: rgba(0, 0, 0, 0.5);
-  backdrop-filter: blur(10px);
-  padding: 15px 25px;
+  gap: 12px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(15px);
+  padding: 12px 20px;
   border-radius: 20px;
   z-index: 100;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
+  transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s;
+  max-width: 95vw;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+#hud.minimized {
+  transform: translate(-50%, calc(100% + 20px));
+  background: transparent;
+  border-color: transparent;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+
+#hud.minimized > *:not(.hud-toggle-btn) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#hud.minimized .hud-toggle-btn {
+  pointer-events: auto; /* Keep the toggle clickable */
+}
+
+@media (max-width: 768px) {
+  #hud {
+    gap: 4px;
+    padding: 6px 10px;
+    border-radius: 12px;
+    bottom: 10px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    width: auto;
+    max-width: 98vw;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none; /* Hide scrollbar Firefox */
+  }
+  
+  #hud::-webkit-scrollbar {
+    display: none; /* Hide scrollbar Chrome/Safari */
+  }
+  
+  .hud-btn {
+    padding: 6px 10px;
+    font-size: 11px;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+}
+
+.hud-toggle-btn {
+  position: fixed;
+  bottom: calc(20px + 45px); /* bottom of hud + roughly hud height */
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(10px);
   border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  border-bottom: none;
+  color: white;
+  width: 40px;
+  height: 25px;
+  border-radius: 12px 12px 0 0;
+  cursor: pointer;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 10px;
+  z-index: 101;
+  transition: all 0.5s cubic-bezier(0.19, 1, 0.22, 1);
+}
+
+@media (max-width: 768px) {
+  .hud-toggle-btn {
+    bottom: calc(10px + 38px); /* mobile bottom + smaller hud height */
+  }
+}
+
+/* We need a way to detect minimized state for the fixed button. 
+   I'll update the JS to toggle a class on the button too, or the body. 
+   For now, I'll use the button's own state if possible, but JS is safer. */
+.hud-toggle-btn.minimized {
+  bottom: 0px;
+  background: rgba(0, 0, 0, 0.8);
+}
+
+
+/* Removed old absolute positioning logic */
+
+.hud-toggle-btn:hover {
+  background: var(--accent);
+  color: white;
 }
 
 .hud-btn {
@@ -164,7 +255,8 @@ p {
 }
 
 .prop-row input[type="number"] {
-  width: 60px;
+  width: 3vw;
+  font-size: 0.7rem;
   background: rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.2);
   color: white;
@@ -293,16 +385,34 @@ p {
 }
 
 .modal-content {
-  background: rgba(20, 20, 30, 0.9);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  padding: 30px;
+  background: rgba(20, 20, 30, 0.95);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  padding: 25px;
   border-radius: 20px;
-  width: 400px;
-  max-width: 90vw;
+  width: 500px;
+  max-width: 95vw;
+  max-height: 90vh;
+  overflow-y: auto;
   color: white;
   position: relative;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
   font-family: var(--sans);
+  scrollbar-width: thin;
+}
+
+@media (max-width: 600px) {
+  .modal-content {
+    padding: 20px;
+    width: 95vw;
+    border-radius: 15px;
+  }
+  
+  .modal-section h3 {
+    font-size: 16px;
+  }
+  .prop-row input[type="number"]{
+    width: 7.5vw;
+  }
 }
 
 .modal-close {
@@ -399,4 +509,43 @@ p {
 .map-inventory-row .map-row-btns {
   display: flex;
   gap: 6px;
+}
+
+/* Mobile Joystick */
+#joystick-container {
+  position: fixed;
+  bottom: 40px;
+  left: 40px;
+  width: 120px;
+  height: 120px;
+  z-index: 500;
+  display: none;
+}
+
+@media (max-width: 1024px), (pointer: coarse) {
+  #joystick-container:not(.hidden) {
+    display: block;
+  }
+}
+
+#joystick-base {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(5px);
+  border: 2px solid rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  touch-action: none;
+}
+
+#joystick-stick {
+  width: 50px;
+  height: 50px;
+  background: var(--accent);
+  border-radius: 50%;
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
 }

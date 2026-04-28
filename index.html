@@ -10,6 +10,7 @@
   <body>
     <canvas id="app"></canvas>
     
+    <button id="btn-hud-toggle" class="hud-toggle-btn">▼</button>
     <div id="hud">
       <div class="circular-menu-container">
         <button id="btn-emotes-toggle" class="hud-btn">Emotes</button>
@@ -22,7 +23,7 @@
       <button id="btn-add-glb" class="hud-btn">Add GLB</button>
       <button id="btn-set-respawn" class="hud-btn">Set Respawn</button>
       <button id="btn-respawn" class="hud-btn">Respawn</button>
-      <button id="btn-change-map" class="hud-btn">🗺️ Change Map</button>
+      <button id="btn-change-map" class="hud-btn">Change Map</button>
     </div>
     
     <div id="properties-menu" class="hidden">
@@ -148,6 +149,13 @@
     <div id="map-edit-toast" class="hidden">
       <span id="map-edit-toast-msg">🗺️ Placez votre map, puis cliquez sur <strong>Set Respawn</strong> pour définir le point d'apparition.</span>
       <button id="btn-exit-map-edit" class="hud-btn" style="margin-left: 16px; padding: 6px 14px;">✓ Terminer sans spawn</button>
+    </div>
+
+    <!-- Mobile Joystick -->
+    <div id="joystick-container" class="hidden">
+      <div id="joystick-base">
+        <div id="joystick-stick"></div>
+      </div>
     </div>
 
     <script type="module" src="/src/main.js"></script>
