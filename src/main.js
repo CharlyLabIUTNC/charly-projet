@@ -374,13 +374,21 @@ controls.enablePan = false; // we want to orbit around the character only
 // We intercept the pointer events and hide the modifier keys from OrbitControls.
 const canvas = document.querySelector('canvas');
 const hideModifiers = (e) => {
+    isUserRotatingCamera = true; // User is interacting with canvas
     Object.defineProperty(e, 'shiftKey', { value: false });
     Object.defineProperty(e, 'ctrlKey', { value: false });
     Object.defineProperty(e, 'metaKey', { value: false });
 };
 canvas.addEventListener('pointerdown', hideModifiers, { capture: true });
-canvas.addEventListener('pointermove', hideModifiers, { capture: true });
-canvas.addEventListener('pointerup', hideModifiers, { capture: true });
+canvas.addEventListener('pointermove', (e) => {
+    if (e.pointerType === 'touch' || e.buttons > 0) {
+        isUserRotatingCamera = true;
+    }
+    hideModifiers(e);
+}, { capture: true });
+canvas.addEventListener('pointerup', () => { isUserRotatingCamera = false; }, { capture: true });
+canvas.addEventListener('pointercancel', () => { isUserRotatingCamera = false; }, { capture: true });
+
 
 // Physics variables
 let verticalVelocity = 0;
@@ -392,6 +400,7 @@ let jumpForce = 0.2;
 // State variables for camera
 let isCrouching = false;
 let isSliding = false;
+let isUserRotatingCamera = false;
 let currentHeadHeight = 1.5;
 
 // HUD State
@@ -636,6 +645,8 @@ function moveAvatar() {
         isSprinting = true;
     }
 
+    isSliding = false; // Reset each frame to recalculate based on conditions
+
     if (isSprinting && isCrouching) {
         isSliding = true;
         isSprinting = false;
@@ -670,12 +681,8 @@ function moveAvatar() {
         moveDirection.addScaledVector(right, joystickMoveVector.x);
         
         // AUTO-FOLLOW CAMERA: Rotate camera towards movement direction
-        // Only on mobile and when not manually rotating (OrbitControls doesn't have a simple isDragging, but we can check if joystick is used)
-        if (joystickMoveVector.length() > 0.1) {
-            const moveAngle = -Math.atan2(joystickMoveVector.x, joystickMoveVector.y);
-            // We want to rotate camera towards this angle. 
-            // In OrbitControls, rotation is controlled by theta.
-            // This is complex to sync perfectly, so we'll use rotateLeft with a small factor
+        // Only on mobile and when not manually rotating
+        if (joystickMoveVector.length() > 0.1 && !isUserRotatingCamera) {
             const rotationFactor = 0.02;
             controls.rotateLeft(joystickMoveVector.x * rotationFactor);
         }
