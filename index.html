@@ -114,7 +114,8 @@
         <div class="modal-section">
           <h3>Importer un modèle (.glb)</h3>
           <div id="drop-zone" class="drop-zone">
-            <p>Glissez et déposez votre fichier .glb ici</p>
+            <p>Glissez un fichier .glb ici ou cliquez pour parcourir</p>
+            <input type="file" id="glb-file-input" accept=".glb,.gltf" style="display: none;">
           </div>
         </div>
         
@@ -166,6 +167,8 @@
         <div class="joystick-stick" id="joystick-look-stick"></div>
       </div>
     </div>
+
+    <div id="toast-notification" class="hidden"></div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

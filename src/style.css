@@ -429,6 +429,7 @@ p {
   text-align: center;
   color: rgba(255, 255, 255, 0.6);
   transition: all 0.3s ease;
+  cursor: pointer;
 }
 
 .drop-zone.dragover {
@@ -553,4 +554,24 @@ p {
   border-radius: 50%;
   box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
   pointer-events: none;
+}
+#toast-notification {
+  position: fixed;
+  top: 30px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--accent);
+  color: white;
+  padding: 12px 24px;
+  border-radius: 10px;
+  font-family: var(--sans);
+  font-weight: 600;
+  box-shadow: 0 10px 30px rgba(170, 59, 255, 0.4);
+  z-index: 2000;
+  transition: all 0.3s ease;
+}
+
+#toast-notification.hidden {
+  top: -60px;
+  opacity: 0;
 }

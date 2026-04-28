@@ -444,11 +444,6 @@ new GLTFLoader().load('/models/avatar/avatar.glb', function (model) {
 
     activeAction = actions['Idle Listening'];
     if (activeAction) activeAction.play();
-
-    // affiche les differentes animations possible 
-    gltf.animations.forEach(animation => {
-        console.log(animation.name);
-    });
 });
 
 /*
@@ -593,8 +588,10 @@ function moveAvatar() {
         // Joystick Look in Ghost Mode
         if (joystickLookVector.length() > 0.1) {
             const lookSpeed = 0.05;
+            // In Ghost mode, we want to rotate the camera around itself.
+            // With OrbitControls, this means rotating the camera then updating target
             controls.rotateLeft(joystickLookVector.x * lookSpeed);
-            controls.rotateUp(-joystickLookVector.y * lookSpeed); // Inverted Y
+            controls.rotateUp(-joystickLookVector.y * lookSpeed); // Note: users requested invert Y earlier, so we use - here if they wanted "up looks up"
         }
 
         camera.position.addScaledVector(flyDir, flySpeed);
@@ -656,7 +653,7 @@ function moveAvatar() {
     if (joystickLookVector.length() > 0.1) {
         const lookSpeed = 0.05;
         controls.rotateLeft(joystickLookVector.x * lookSpeed);
-        controls.rotateUp(-joystickLookVector.y * lookSpeed); // Inverted Y
+        controls.rotateUp(-joystickLookVector.y * lookSpeed);
     }
 
     // Calculate rotation offset for strafing (moving left/right)
@@ -1088,15 +1085,17 @@ document.getElementById('btn-dance2').addEventListener('click', () => {
     document.getElementById('circular-menu').classList.add('hidden');
 });
 
-document.getElementById('btn-set-respawn').addEventListener('click', () => {
+document.getElementById('btn-set-respawn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    console.log("Set Respawn Clicked");
     const spawnKey = getMapSpawnKey(activeMapName);
     let pos;
     if (isMapEditMode) {
-        // Use camera controls target as spawn (where the user is looking at)
         pos = controls.target.clone();
         localStorage.setItem(spawnKey, JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
         localStorage.setItem('spawnPoint', JSON.stringify({ x: pos.x, y: pos.y, z: pos.z })); // compat
         avatarGroup.position.set(pos.x, pos.y, pos.z);
+        showToast("Point de spawn défini !");
         exitMapEditMode();
     } else {
         pos = avatarGroup.position;
@@ -1105,14 +1104,18 @@ document.getElementById('btn-set-respawn').addEventListener('click', () => {
     }
 });
 
-document.getElementById('btn-respawn').addEventListener('click', () => {
+document.getElementById('btn-respawn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    console.log("Respawn Clicked");
     const spawnKey = getMapSpawnKey(activeMapName);
     const savedSpawn = localStorage.getItem(spawnKey) || localStorage.getItem('spawnPoint');
     if (savedSpawn) {
         const spawnPos = JSON.parse(savedSpawn);
         avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+        showToast("Retour au point de spawn");
     } else {
         avatarGroup.position.set(0, 0, 0);
+        showToast("Aucun point de spawn défini");
     }
     verticalVelocity = 0;
 });
@@ -1190,8 +1193,37 @@ document.getElementById('btn-add-cone').addEventListener('click', () => {
     spawnObject(mesh, 'cone');
 });
 
-// Drag & Drop logic for GLB
+// --- Toast Notification ---
+function showToast(message) {
+    const toast = document.getElementById('toast-notification');
+    toast.textContent = message;
+    toast.classList.remove('hidden');
+    setTimeout(() => {
+        toast.classList.add('hidden');
+    }, 3000);
+}
+
+// --- Drop Zone & File Input ---
 const dropZone = document.getElementById('drop-zone');
+const fileInput = document.getElementById('glb-file-input');
+
+dropZone.addEventListener('click', () => {
+    fileInput.click();
+});
+
+fileInput.addEventListener('change', async (e) => {
+    if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
+            const arrayBuffer = await file.arrayBuffer();
+            await saveFileToDB(file.name, arrayBuffer);
+            updateInventoryUI();
+            document.getElementById('add-glb-modal').classList.add('hidden');
+            showToast("Modèle importé !");
+        }
+    }
+});
+
 dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('dragover');
@@ -1309,9 +1341,16 @@ function animate() {
         deltaPos.y += step;
         camera.position.add(deltaPos);
 
-        // Update controls target to follow avatar
+        // Update controls target to follow avatar, but only if not doing look-around?
+        // Actually, for OrbitControls to work while moving, we MUST update target.
+        // The rotation is maintained relative to the target by OrbitControls.
         controls.target.copy(avatarGroup.position);
-        controls.target.y += currentHeadHeight; // Look at current head level
+        controls.target.y += currentHeadHeight;
+    } else {
+        // In ghost mode, the target must stay in front of the camera to allow "first person" style rotation
+        const fwd = new THREE.Vector3();
+        camera.getWorldDirection(fwd);
+        controls.target.copy(camera.position).add(fwd);
     }
 
     controls.update();
