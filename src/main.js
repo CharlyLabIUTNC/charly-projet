@@ -699,9 +699,10 @@ function moveAvatar() {
         else if (keys['KeyS']) rotationOffset = Math.PI;
     }
 
-    // Always rotate avatar to face away from camera (or towards where camera looks)
-    // plus the offset to lean into the movement
-    avatarGroup.rotation.y = Math.atan2(forward.x, forward.z) + Math.PI + rotationOffset;
+    // Only rotate avatar if we are moving
+    if (moveDirection.length() > 0.01) {
+        avatarGroup.rotation.y = Math.atan2(forward.x, forward.z) + Math.PI + rotationOffset;
+    }
 
 
     // Wall collision detection
