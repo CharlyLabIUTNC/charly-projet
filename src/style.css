@@ -127,12 +127,11 @@ p {
   pointer-events: none;
 }
   
-  .hud-btn {
-    padding: 6px 10px;
-    font-size: 11px;
-    white-space: nowrap;
-    flex-shrink: 0;
-  }
+.hud-btn {
+  padding: 6px 10px;
+  font-size: 11px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
 .hud-toggle-btn {
