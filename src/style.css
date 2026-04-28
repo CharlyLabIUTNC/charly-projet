@@ -153,7 +153,7 @@ p {
 
 .hud-toggle-btn {
   position: fixed;
-  bottom: calc(20px + 45px); /* bottom of hud + roughly hud height */
+  bottom: 5vw; /* bottom of hud + roughly hud height */
   left: 50%;
   transform: translateX(-50%);
   background: rgba(0, 0, 0, 0.5);
@@ -175,7 +175,7 @@ p {
 
 @media (max-width: 768px) {
   .hud-toggle-btn {
-    bottom: calc(10px + 38px); /* mobile bottom + smaller hud height */
+    bottom: 9vw; /* mobile bottom + smaller hud height */
   }
 }
 
