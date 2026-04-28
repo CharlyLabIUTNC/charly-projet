@@ -364,7 +364,7 @@ if (savedSpawn) {
 // OrbitControls setup
 const controls = new OrbitControls(camera, document.querySelector('canvas'));
 controls.enableDamping = true;
-controls.dampingFactor = 0.05;
+controls.dampingFactor = 0.2; // Sharper feel, less inertia
 controls.minDistance = 0.1; // for 1st person
 controls.maxDistance = 10;
 controls.enablePan = false; // we want to orbit around the character only
@@ -587,11 +587,9 @@ function moveAvatar() {
         
         // Joystick Look in Ghost Mode
         if (joystickLookVector.length() > 0.1) {
-            const lookSpeed = 0.05;
-            // In Ghost mode, we want to rotate the camera around itself.
-            // With OrbitControls, this means rotating the camera then updating target
+            const lookSpeed = 0.02; // Reduced speed for better control
             controls.rotateLeft(joystickLookVector.x * lookSpeed);
-            controls.rotateUp(-joystickLookVector.y * lookSpeed); // Note: users requested invert Y earlier, so we use - here if they wanted "up looks up"
+            controls.rotateUp(-joystickLookVector.y * lookSpeed);
         }
 
         camera.position.addScaledVector(flyDir, flySpeed);
@@ -651,7 +649,7 @@ function moveAvatar() {
 
     // Joystick Look in Avatar Mode
     if (joystickLookVector.length() > 0.1) {
-        const lookSpeed = 0.05;
+        const lookSpeed = 0.02; // Reduced speed
         controls.rotateLeft(joystickLookVector.x * lookSpeed);
         controls.rotateUp(-joystickLookVector.y * lookSpeed);
     }
@@ -1087,21 +1085,21 @@ document.getElementById('btn-dance2').addEventListener('click', () => {
 
 document.getElementById('btn-set-respawn').addEventListener('click', (e) => {
     e.stopPropagation();
-    console.log("Set Respawn Clicked");
     const spawnKey = getMapSpawnKey(activeMapName);
     let pos;
-    if (isMapEditMode) {
-        pos = controls.target.clone();
-        localStorage.setItem(spawnKey, JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
-        localStorage.setItem('spawnPoint', JSON.stringify({ x: pos.x, y: pos.y, z: pos.z })); // compat
-        avatarGroup.position.set(pos.x, pos.y, pos.z);
-        showToast("Point de spawn défini !");
-        exitMapEditMode();
+    if (isGhostMode) {
+        // If flying (ghost or edit), use camera position but adjust to be on floor
+        pos = camera.position.clone();
+        pos.y -= 1.5; // Offset to account for eye level
     } else {
-        pos = avatarGroup.position;
-        localStorage.setItem(spawnKey, JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
-        localStorage.setItem('spawnPoint', JSON.stringify({ x: pos.x, y: pos.y, z: pos.z })); // compat
+        pos = avatarGroup.position.clone();
     }
+    
+    localStorage.setItem(spawnKey, JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
+    localStorage.setItem('spawnPoint', JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
+    
+    showToast("Point de spawn défini !");
+    if (isMapEditMode) exitMapEditMode();
 });
 
 document.getElementById('btn-respawn').addEventListener('click', (e) => {
@@ -1111,7 +1109,8 @@ document.getElementById('btn-respawn').addEventListener('click', (e) => {
     const savedSpawn = localStorage.getItem(spawnKey) || localStorage.getItem('spawnPoint');
     if (savedSpawn) {
         const spawnPos = JSON.parse(savedSpawn);
-        avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+        // Add safety Y offset to prevent falling under map
+        avatarGroup.position.set(spawnPos.x, spawnPos.y + 1.0, spawnPos.z);
         showToast("Retour au point de spawn");
     } else {
         avatarGroup.position.set(0, 0, 0);
