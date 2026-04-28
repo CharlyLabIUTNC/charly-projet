@@ -104,8 +104,14 @@ p {
   box-shadow: 0 10px 40px rgba(0, 0, 0, 0.4);
   transition: transform 0.5s cubic-bezier(0.19, 1, 0.22, 1), opacity 0.3s;
   max-width: 95vw;
-  flex-wrap: wrap;
-  justify-content: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  justify-content: flex-start; /* Start from left to allow scrolling */
+  scrollbar-width: none;
+}
+
+#hud::-webkit-scrollbar {
+  display: none;
 }
 
 #hud.minimized {
@@ -127,20 +133,11 @@ p {
 
 @media (max-width: 768px) {
   #hud {
-    gap: 4px;
-    padding: 6px 10px;
+    gap: 6px;
+    padding: 8px 12px;
     border-radius: 12px;
-    bottom: 10px;
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    width: auto;
-    max-width: 98vw;
-    -webkit-overflow-scrolling: touch;
-    scrollbar-width: none; /* Hide scrollbar Firefox */
-  }
-  
-  #hud::-webkit-scrollbar {
-    display: none; /* Hide scrollbar Chrome/Safari */
+    bottom: 15px;
+    max-width: 90vw;
   }
   
   .hud-btn {
