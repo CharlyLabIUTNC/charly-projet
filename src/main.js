@@ -483,6 +483,7 @@ const joystickContainer = document.getElementById('joystick-container');
 let joystickMoveVector = new THREE.Vector2(0, 0);
 let isMobileSprinting = false;
 let isMobileCrouching = false;
+let isMobileJumping = false;
 
 function setupJoystick(baseId, stickId, onUpdate, onEnd) {
     const base = document.getElementById(baseId);
@@ -582,6 +583,17 @@ btnCrouch.addEventListener('touchstart', (e) => {
 btnCrouch.addEventListener('touchend', () => {
     isMobileCrouching = false;
     btnCrouch.classList.remove('active');
+});
+
+const btnJump = document.getElementById('btn-mobile-jump');
+btnJump.addEventListener('touchstart', (e) => {
+    isMobileJumping = true;
+    btnJump.classList.add('active');
+    e.preventDefault();
+}, { passive: false });
+btnJump.addEventListener('touchend', () => {
+    isMobileJumping = false;
+    btnJump.classList.remove('active');
 });
 
 
@@ -730,7 +742,7 @@ function moveAvatar() {
     }
 
     // Jump logic
-    if (keys['Space'] && isGrounded) {
+    if ((keys['Space'] || isMobileJumping) && isGrounded) {
         verticalVelocity = jumpForce;
         isGrounded = false;
     }
