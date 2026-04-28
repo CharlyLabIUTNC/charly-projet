@@ -481,7 +481,8 @@ document.addEventListener('keyup', (event) => {
 const joystickContainer = document.getElementById('joystick-container');
 // --- Mobile Joysticks Logic ---
 let joystickMoveVector = new THREE.Vector2(0, 0);
-let joystickLookVector = new THREE.Vector2(0, 0);
+let isMobileSprinting = false;
+let isMobileCrouching = false;
 
 function setupJoystick(baseId, stickId, onUpdate, onEnd) {
     const base = document.getElementById(baseId);
@@ -554,10 +555,35 @@ setupJoystick('joystick-move-base', 'joystick-move-stick',
     () => joystickMoveVector.set(0, 0)
 );
 
-setupJoystick('joystick-look-base', 'joystick-look-stick',
-    (x, y) => joystickLookVector.set(x, y),
-    () => joystickLookVector.set(0, 0)
-);
+// Mobile Action Buttons
+const mobileActions = document.getElementById('mobile-actions');
+const btnSprint = document.getElementById('btn-mobile-sprint');
+const btnCrouch = document.getElementById('btn-mobile-crouch');
+
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    mobileActions.classList.remove('hidden');
+}
+
+btnSprint.addEventListener('touchstart', (e) => {
+    isMobileSprinting = true;
+    btnSprint.classList.add('active');
+    e.preventDefault();
+}, { passive: false });
+btnSprint.addEventListener('touchend', () => {
+    isMobileSprinting = false;
+    btnSprint.classList.remove('active');
+});
+
+btnCrouch.addEventListener('touchstart', (e) => {
+    isMobileCrouching = true;
+    btnCrouch.classList.add('active');
+    e.preventDefault();
+}, { passive: false });
+btnCrouch.addEventListener('touchend', () => {
+    isMobileCrouching = false;
+    btnCrouch.classList.remove('active');
+});
+
 
 // keyboard movement function
 function moveAvatar() {
@@ -583,13 +609,9 @@ function moveAvatar() {
         if (joystickMoveVector.length() > 0.1) {
             flyDir.addScaledVector(fwd, joystickMoveVector.y);
             flyDir.addScaledVector(right, joystickMoveVector.x);
-        }
-        
-        // Joystick Look in Ghost Mode
-        if (joystickLookVector.length() > 0.1) {
-            const lookSpeed = 0.02; // Reduced speed for better control
-            controls.rotateLeft(joystickLookVector.x * lookSpeed);
-            controls.rotateUp(-joystickLookVector.y * lookSpeed);
+            
+            // Auto-follow: rotate camera slightly towards move direction in ghost mode?
+            // Maybe not needed for ghost mode, usually people want full control.
         }
 
         camera.position.addScaledVector(flyDir, flySpeed);
@@ -603,11 +625,10 @@ function moveAvatar() {
 
     let isMoving = false;
     let isSprinting = false;
-    isCrouching = keys['ControlLeft'] || keys['ControlRight'] || keys['MetaLeft'] || keys['MetaRight'];
-    isSliding = false;
+    isCrouching = keys['ControlLeft'] || keys['ControlRight'] || keys['MetaLeft'] || keys['MetaRight'] || isMobileCrouching;
     let walkSpeed = 0.02;
 
-    if ((keys['ShiftLeft'] || keys['ShiftRight']) && keys['KeyW']) {
+    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isMobileSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1)) {
         isSprinting = true;
     }
 
@@ -643,16 +664,20 @@ function moveAvatar() {
     if (joystickMoveVector.length() > 0.1) {
         moveDirection.addScaledVector(forward, joystickMoveVector.y);
         moveDirection.addScaledVector(right, joystickMoveVector.x);
+        
+        // AUTO-FOLLOW CAMERA: Rotate camera towards movement direction
+        // Only on mobile and when not manually rotating (OrbitControls doesn't have a simple isDragging, but we can check if joystick is used)
+        if (joystickMoveVector.length() > 0.1) {
+            const moveAngle = -Math.atan2(joystickMoveVector.x, joystickMoveVector.y);
+            // We want to rotate camera towards this angle. 
+            // In OrbitControls, rotation is controlled by theta.
+            // This is complex to sync perfectly, so we'll use rotateLeft with a small factor
+            const rotationFactor = 0.02;
+            controls.rotateLeft(joystickMoveVector.x * rotationFactor);
+        }
     }
 
     moveDirection.normalize();
-
-    // Joystick Look in Avatar Mode
-    if (joystickLookVector.length() > 0.1) {
-        const lookSpeed = 0.02; // Reduced speed
-        controls.rotateLeft(joystickLookVector.x * lookSpeed);
-        controls.rotateUp(-joystickLookVector.y * lookSpeed);
-    }
 
     // Calculate rotation offset for strafing (moving left/right)
     let rotationOffset = 0;
