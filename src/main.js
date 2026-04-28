@@ -484,83 +484,85 @@ document.addEventListener('keyup', (event) => {
 
 // --- Mobile Joystick Logic ---
 const joystickContainer = document.getElementById('joystick-container');
-const joystickBase = document.getElementById('joystick-base');
-const joystickStick = document.getElementById('joystick-stick');
-let joystickVector = new THREE.Vector2(0, 0);
-let activeJoystickTouchId = null;
+// --- Mobile Joysticks Logic ---
+let joystickMoveVector = new THREE.Vector2(0, 0);
+let joystickLookVector = new THREE.Vector2(0, 0);
 
-if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-    joystickContainer.classList.remove('hidden');
+function setupJoystick(baseId, stickId, onUpdate, onEnd) {
+    const base = document.getElementById(baseId);
+    const stick = document.getElementById(stickId);
+    const container = base.parentElement;
+    let activeTouchId = null;
+
+    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+        container.classList.remove('hidden');
+    }
+
+    base.addEventListener('touchstart', (e) => {
+        if (activeTouchId !== null) return;
+        const touch = e.changedTouches[0];
+        activeTouchId = touch.identifier;
+        update(touch);
+        e.stopPropagation();
+        if (e.cancelable) e.preventDefault();
+    }, { passive: false });
+
+    window.addEventListener('touchmove', (e) => {
+        if (activeTouchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === activeTouchId) {
+                update(e.changedTouches[i]);
+                e.stopPropagation();
+                if (e.cancelable) e.preventDefault();
+                break;
+            }
+        }
+    }, { passive: false });
+
+    const end = (e) => {
+        if (activeTouchId === null) return;
+        for (let i = 0; i < e.changedTouches.length; i++) {
+            if (e.changedTouches[i].identifier === activeTouchId) {
+                activeTouchId = null;
+                stick.style.transform = `translate(0, 0)`;
+                onEnd();
+                break;
+            }
+        }
+    };
+
+    window.addEventListener('touchend', end);
+    window.addEventListener('touchcancel', end);
+
+    function update(touch) {
+        const rect = base.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        const maxDistance = rect.width / 2;
+
+        let dx = touch.clientX - centerX;
+        let dy = touch.clientY - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+
+        if (distance > maxDistance) {
+            dx = (dx / distance) * maxDistance;
+            dy = (dy / distance) * maxDistance;
+        }
+
+        stick.style.transform = `translate(${dx}px, ${dy}px)`;
+        onUpdate(dx / maxDistance, -dy / maxDistance);
+    }
 }
 
-joystickBase.addEventListener('touchstart', (e) => {
-    if (activeJoystickTouchId !== null) return;
-    const touch = e.changedTouches[0];
-    activeJoystickTouchId = touch.identifier;
-    handleJoystick(touch);
-    e.stopPropagation();
-    if (e.cancelable) e.preventDefault();
-}, { passive: false });
+setupJoystick('joystick-move-base', 'joystick-move-stick', 
+    (x, y) => joystickMoveVector.set(x, y),
+    () => joystickMoveVector.set(0, 0)
+);
 
-window.addEventListener('touchmove', (e) => {
-    if (activeJoystickTouchId === null) return;
-    
-    // Find the touch that matches our joystick ID
-    for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
-            handleJoystick(e.changedTouches[i]);
-            e.stopPropagation();
-            if (e.cancelable) e.preventDefault();
-            break;
-        }
-    }
-}, { passive: false });
-
-window.addEventListener('touchend', (e) => {
-    if (activeJoystickTouchId === null) return;
-    
-    for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
-            activeJoystickTouchId = null;
-            joystickVector.set(0, 0);
-            joystickStick.style.transform = `translate(0, 0)`;
-            break;
-        }
-    }
-});
-
-window.addEventListener('touchcancel', (e) => {
-    if (activeJoystickTouchId === null) return;
-    for (let i = 0; i < e.changedTouches.length; i++) {
-        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
-            activeJoystickTouchId = null;
-            joystickVector.set(0, 0);
-            joystickStick.style.transform = `translate(0, 0)`;
-            break;
-        }
-    }
-});
-
-function handleJoystick(touch) {
-    const rect = joystickBase.getBoundingClientRect();
-    const centerX = rect.left + rect.width / 2;
-    const centerY = rect.top + rect.height / 2;
-    const maxDistance = rect.width / 2;
-
-    let dx = touch.clientX - centerX;
-    let dy = touch.clientY - centerY;
-    const distance = Math.sqrt(dx * dx + dy * dy);
-
-    if (distance > maxDistance) {
-        dx = (dx / distance) * maxDistance;
-        dy = (dy / distance) * maxDistance;
-    }
-
-    joystickStick.style.transform = `translate(${dx}px, ${dy}px)`;
-    
-    // Normalize vector for movement
-    joystickVector.set(dx / maxDistance, -dy / maxDistance); // Y is inverted in screen space
-}
+setupJoystick('joystick-look-base', 'joystick-look-stick',
+    (x, y) => joystickLookVector.set(x, y),
+    () => joystickLookVector.set(0, 0)
+);
 
 // keyboard movement function
 function moveAvatar() {
@@ -583,9 +585,16 @@ function moveAvatar() {
         if (keys['ControlLeft']) flyDir.sub(camera.up);
 
         // Add Joystick input for ghost mode
-        if (joystickVector.length() > 0.1) {
-            flyDir.addScaledVector(fwd, joystickVector.y);
-            flyDir.addScaledVector(right, joystickVector.x);
+        if (joystickMoveVector.length() > 0.1) {
+            flyDir.addScaledVector(fwd, joystickMoveVector.y);
+            flyDir.addScaledVector(right, joystickMoveVector.x);
+        }
+        
+        // Joystick Look in Ghost Mode
+        if (joystickLookVector.length() > 0.1) {
+            const lookSpeed = 0.05;
+            controls.rotateLeft(joystickLookVector.x * lookSpeed);
+            controls.rotateUp(joystickLookVector.y * lookSpeed);
         }
 
         camera.position.addScaledVector(flyDir, flySpeed);
@@ -636,19 +645,26 @@ function moveAvatar() {
     if (keys['KeyD']) moveDirection.add(right);
 
     // Add Joystick input
-    if (joystickVector.length() > 0.1) {
-        moveDirection.addScaledVector(forward, joystickVector.y);
-        moveDirection.addScaledVector(right, joystickVector.x);
+    if (joystickMoveVector.length() > 0.1) {
+        moveDirection.addScaledVector(forward, joystickMoveVector.y);
+        moveDirection.addScaledVector(right, joystickMoveVector.x);
     }
 
     moveDirection.normalize();
+
+    // Joystick Look in Avatar Mode
+    if (joystickLookVector.length() > 0.1) {
+        const lookSpeed = 0.05;
+        controls.rotateLeft(joystickLookVector.x * lookSpeed);
+        controls.rotateUp(joystickLookVector.y * lookSpeed);
+    }
 
     // Calculate rotation offset for strafing (moving left/right)
     let rotationOffset = 0;
     
     // If using joystick, rotation is directly from vector
-    if (joystickVector.length() > 0.1) {
-        rotationOffset = -Math.atan2(joystickVector.x, joystickVector.y);
+    if (joystickMoveVector.length() > 0.1) {
+        rotationOffset = -Math.atan2(joystickMoveVector.x, joystickMoveVector.y);
     } else {
         if (keys['KeyA'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = Math.PI / 2;
         else if (keys['KeyD'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = -Math.PI / 2;

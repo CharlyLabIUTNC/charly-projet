@@ -15,10 +15,6 @@
       <div id="hud">
         <div class="circular-menu-container">
           <button id="btn-emotes-toggle" class="hud-btn">Emotes</button>
-          <div id="circular-menu" class="hidden">
-            <button id="btn-dance1" class="circle-btn">Dance 1</button>
-            <button id="btn-dance2" class="circle-btn">Dance 2</button>
-          </div>
         </div>
         <button id="btn-ghost" class="hud-btn">Ghost Mode</button>
         <button id="btn-add-glb" class="hud-btn">Add GLB</button>
@@ -26,6 +22,11 @@
         <button id="btn-respawn" class="hud-btn">Respawn</button>
         <button id="btn-change-map" class="hud-btn">Change Map</button>
       </div>
+    </div>
+    
+    <div id="circular-menu" class="hidden">
+      <button id="btn-dance1" class="circle-btn">Dance 1</button>
+      <button id="btn-dance2" class="circle-btn">Dance 2</button>
     </div>
     
     <div id="properties-menu" class="hidden">
@@ -153,10 +154,16 @@
       <button id="btn-exit-map-edit" class="hud-btn" style="margin-left: 16px; padding: 6px 14px;">✓ Terminer sans spawn</button>
     </div>
 
-    <!-- Mobile Joystick -->
-    <div id="joystick-container" class="hidden">
-      <div id="joystick-base">
-        <div id="joystick-stick"></div>
+    <!-- Mobile Joysticks -->
+    <div id="joystick-move-container" class="joystick-container hidden">
+      <div class="joystick-base" id="joystick-move-base">
+        <div class="joystick-stick" id="joystick-move-stick"></div>
+      </div>
+    </div>
+
+    <div id="joystick-look-container" class="joystick-container hidden">
+      <div class="joystick-base" id="joystick-look-base">
+        <div class="joystick-stick" id="joystick-look-stick"></div>
       </div>
     </div>
 

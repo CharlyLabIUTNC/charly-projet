@@ -319,18 +319,25 @@ p {
 }
 
 #circular-menu {
-  position: absolute;
-  bottom: calc(100% + 20px);
+  position: fixed;
+  bottom: 85px; /* Above the HUD wrapper */
   left: 50%;
   transform: translateX(-50%);
   display: flex;
   flex-direction: column;
   gap: 10px;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(0, 0, 0, 0.7);
   padding: 15px;
   border-radius: 15px;
   border: 1px solid rgba(255, 255, 255, 0.1);
   backdrop-filter: blur(10px);
+  z-index: 600;
+}
+
+@media (max-width: 768px) {
+  #circular-menu {
+    bottom: 75px;
+  }
 }
 
 .circle-btn {
@@ -502,24 +509,31 @@ p {
   gap: 6px;
 }
 
-/* Mobile Joystick */
-#joystick-container {
+/* Mobile Joysticks */
+.joystick-container {
   position: fixed;
   bottom: 40px;
-  left: 40px;
   width: 120px;
   height: 120px;
   z-index: 500;
   display: none;
 }
 
+#joystick-move-container {
+  left: 40px;
+}
+
+#joystick-look-container {
+  right: 40px;
+}
+
 @media (max-width: 1024px), (pointer: coarse) {
-  #joystick-container:not(.hidden) {
+  .joystick-container:not(.hidden) {
     display: block;
   }
 }
 
-#joystick-base {
+.joystick-base {
   width: 100%;
   height: 100%;
   background: rgba(255, 255, 255, 0.1);
@@ -532,7 +546,7 @@ p {
   touch-action: none;
 }
 
-#joystick-stick {
+.joystick-stick {
   width: 50px;
   height: 50px;
   background: var(--accent);
