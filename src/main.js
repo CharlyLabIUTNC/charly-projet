@@ -594,7 +594,7 @@ function moveAvatar() {
         if (joystickLookVector.length() > 0.1) {
             const lookSpeed = 0.05;
             controls.rotateLeft(joystickLookVector.x * lookSpeed);
-            controls.rotateUp(joystickLookVector.y * lookSpeed);
+            controls.rotateUp(-joystickLookVector.y * lookSpeed); // Inverted Y
         }
 
         camera.position.addScaledVector(flyDir, flySpeed);
@@ -656,7 +656,7 @@ function moveAvatar() {
     if (joystickLookVector.length() > 0.1) {
         const lookSpeed = 0.05;
         controls.rotateLeft(joystickLookVector.x * lookSpeed);
-        controls.rotateUp(joystickLookVector.y * lookSpeed);
+        controls.rotateUp(-joystickLookVector.y * lookSpeed); // Inverted Y
     }
 
     // Calculate rotation offset for strafing (moving left/right)
