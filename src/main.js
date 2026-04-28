@@ -558,23 +558,12 @@ setupJoystick('joystick-move-base', 'joystick-move-stick',
 
 // Mobile Action Buttons
 const mobileActions = document.getElementById('mobile-actions');
-const btnSprint = document.getElementById('btn-mobile-sprint');
-const btnCrouch = document.getElementById('btn-mobile-crouch');
 
 if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
     mobileActions.classList.remove('hidden');
 }
 
-btnSprint.addEventListener('touchstart', (e) => {
-    isMobileSprinting = true;
-    btnSprint.classList.add('active');
-    e.preventDefault();
-}, { passive: false });
-btnSprint.addEventListener('touchend', () => {
-    isMobileSprinting = false;
-    btnSprint.classList.remove('active');
-});
-
+const btnCrouch = document.getElementById('btn-mobile-crouch');
 btnCrouch.addEventListener('touchstart', (e) => {
     isMobileCrouching = true;
     btnCrouch.classList.add('active');
@@ -640,7 +629,10 @@ function moveAvatar() {
     isCrouching = keys['ControlLeft'] || keys['ControlRight'] || keys['MetaLeft'] || keys['MetaRight'] || isMobileCrouching;
     let walkSpeed = 0.02;
 
-    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isMobileSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1)) {
+    // Auto-sprint on mobile if joystick is pushed far
+    const isJoystickSprinting = joystickMoveVector.length() > 0.8;
+
+    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1)) {
         isSprinting = true;
     }
 
