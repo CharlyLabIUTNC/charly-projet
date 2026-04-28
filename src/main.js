@@ -487,33 +487,58 @@ const joystickContainer = document.getElementById('joystick-container');
 const joystickBase = document.getElementById('joystick-base');
 const joystickStick = document.getElementById('joystick-stick');
 let joystickVector = new THREE.Vector2(0, 0);
-let isJoystickTouchActive = false;
+let activeJoystickTouchId = null;
 
 if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
     joystickContainer.classList.remove('hidden');
 }
 
 joystickBase.addEventListener('touchstart', (e) => {
-    isJoystickTouchActive = true;
-    controls.enabled = false; // Disable camera orbit while using joystick
-    handleJoystick(e.touches[0]);
+    if (activeJoystickTouchId !== null) return;
+    const touch = e.changedTouches[0];
+    activeJoystickTouchId = touch.identifier;
+    handleJoystick(touch);
     e.stopPropagation();
     if (e.cancelable) e.preventDefault();
 }, { passive: false });
 
 window.addEventListener('touchmove', (e) => {
-    if (isJoystickTouchActive) {
-        handleJoystick(e.touches[0]);
-        e.stopPropagation();
-        if (e.cancelable) e.preventDefault();
+    if (activeJoystickTouchId === null) return;
+    
+    // Find the touch that matches our joystick ID
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
+            handleJoystick(e.changedTouches[i]);
+            e.stopPropagation();
+            if (e.cancelable) e.preventDefault();
+            break;
+        }
     }
 }, { passive: false });
 
-window.addEventListener('touchend', () => {
-    isJoystickTouchActive = false;
-    controls.enabled = true; // Re-enable camera orbit
-    joystickVector.set(0, 0);
-    joystickStick.style.transform = `translate(0, 0)`;
+window.addEventListener('touchend', (e) => {
+    if (activeJoystickTouchId === null) return;
+    
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
+            activeJoystickTouchId = null;
+            joystickVector.set(0, 0);
+            joystickStick.style.transform = `translate(0, 0)`;
+            break;
+        }
+    }
+});
+
+window.addEventListener('touchcancel', (e) => {
+    if (activeJoystickTouchId === null) return;
+    for (let i = 0; i < e.changedTouches.length; i++) {
+        if (e.changedTouches[i].identifier === activeJoystickTouchId) {
+            activeJoystickTouchId = null;
+            joystickVector.set(0, 0);
+            joystickStick.style.transform = `translate(0, 0)`;
+            break;
+        }
+    }
 });
 
 function handleJoystick(touch) {
