@@ -524,15 +524,19 @@ p {
   left: 40px;
 }
 
-#mobile-actions {
+#joystick-look-container, #mobile-actions {
   position: fixed;
   bottom: 40px;
   right: 40px;
+  z-index: 500;
+}
+
+#mobile-actions {
   display: flex;
   flex-direction: column;
   gap: 15px;
-  z-index: 500;
 }
+
 
 @media (max-width: 1024px), (pointer: coarse) {
   .joystick-container:not(.hidden), #mobile-actions:not(.hidden) {

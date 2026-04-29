@@ -369,25 +369,24 @@ controls.minDistance = 0.1; // for 1st person
 controls.maxDistance = 10;
 controls.enablePan = false; // we want to orbit around the character only
 
-// FIX: OrbitControls uses Shift/Ctrl + Left Click to pan by default.
-// This blocks camera rotation when sprinting (Shift) or crouching (Ctrl).
-// We intercept the pointer events and hide the modifier keys from OrbitControls.
+// Reliable detection of manual camera rotation
+controls.addEventListener('start', () => {
+    isUserRotatingCamera = true;
+});
+controls.addEventListener('end', () => {
+    isUserRotatingCamera = false;
+    lastManualRotationTime = Date.now();
+});
+
 const canvas = document.querySelector('canvas');
 const hideModifiers = (e) => {
-    isUserRotatingCamera = true; // User is interacting with canvas
     Object.defineProperty(e, 'shiftKey', { value: false });
     Object.defineProperty(e, 'ctrlKey', { value: false });
     Object.defineProperty(e, 'metaKey', { value: false });
 };
 canvas.addEventListener('pointerdown', hideModifiers, { capture: true });
-canvas.addEventListener('pointermove', (e) => {
-    if (e.pointerType === 'touch' || e.buttons > 0) {
-        isUserRotatingCamera = true;
-    }
-    hideModifiers(e);
-}, { capture: true });
-canvas.addEventListener('pointerup', () => { isUserRotatingCamera = false; }, { capture: true });
-canvas.addEventListener('pointercancel', () => { isUserRotatingCamera = false; }, { capture: true });
+canvas.addEventListener('pointermove', hideModifiers, { capture: true });
+canvas.addEventListener('pointerup', hideModifiers, { capture: true });
 
 
 // Physics variables
@@ -401,6 +400,7 @@ let jumpForce = 0.2;
 let isCrouching = false;
 let isSliding = false;
 let isUserRotatingCamera = false;
+let lastManualRotationTime = 0;
 let currentHeadHeight = 1.5;
 
 // HUD State
@@ -490,9 +490,27 @@ document.addEventListener('keyup', (event) => {
 const joystickContainer = document.getElementById('joystick-container');
 // --- Mobile Joysticks Logic ---
 let joystickMoveVector = new THREE.Vector2(0, 0);
+let joystickLookVector = new THREE.Vector2(0, 0);
 let isMobileSprinting = false;
 let isMobileCrouching = false;
 let isMobileJumping = false;
+
+function syncMobileControls() {
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    if (!isMobile) return;
+
+    const actionButtons = document.getElementById('mobile-actions');
+    const lookJoystick = document.getElementById('joystick-look-container');
+
+    if (isGhostMode) {
+        actionButtons.classList.add('hidden');
+        lookJoystick.classList.remove('hidden');
+    } else {
+        actionButtons.classList.remove('hidden');
+        lookJoystick.classList.add('hidden');
+    }
+}
+
 
 function setupJoystick(baseId, stickId, onUpdate, onEnd) {
     const base = document.getElementById(baseId);
@@ -565,12 +583,15 @@ setupJoystick('joystick-move-base', 'joystick-move-stick',
     () => joystickMoveVector.set(0, 0)
 );
 
+setupJoystick('joystick-look-base', 'joystick-look-stick',
+    (x, y) => joystickLookVector.set(x, y),
+    () => joystickLookVector.set(0, 0)
+);
+
 // Mobile Action Buttons
 const mobileActions = document.getElementById('mobile-actions');
+syncMobileControls();
 
-if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-    mobileActions.classList.remove('hidden');
-}
 
 const btnCrouch = document.getElementById('btn-mobile-crouch');
 btnCrouch.addEventListener('touchstart', (e) => {
@@ -619,9 +640,13 @@ function moveAvatar() {
         if (joystickMoveVector.length() > 0.1) {
             flyDir.addScaledVector(fwd, joystickMoveVector.y);
             flyDir.addScaledVector(right, joystickMoveVector.x);
-            
-            // Auto-follow: rotate camera slightly towards move direction in ghost mode?
-            // Maybe not needed for ghost mode, usually people want full control.
+        }
+        
+        // Look Joystick in Ghost Mode - Uniform control
+        if (joystickLookVector.length() > 0.05) {
+            const lookSpeed = 0.03; // Consistent speed
+            controls.rotateLeft(joystickLookVector.x * lookSpeed);
+            controls.rotateUp(-joystickLookVector.y * lookSpeed);
         }
 
         camera.position.addScaledVector(flyDir, flySpeed);
@@ -681,11 +706,23 @@ function moveAvatar() {
         moveDirection.addScaledVector(right, joystickMoveVector.x);
         
         // AUTO-FOLLOW CAMERA: Rotate camera towards movement direction
-        // Only on mobile and when not manually rotating
-        if (joystickMoveVector.length() > 0.1 && !isUserRotatingCamera) {
-            const rotationFactor = 0.02;
-            controls.rotateLeft(joystickMoveVector.x * rotationFactor);
+        // Only on mobile and when not manually rotating (with a 1s buffer after manual rotation)
+        const now = Date.now();
+        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        
+        if (isMobile) {
+            // Block manual OrbitControls rotation while moving on mobile
+            // to avoid the "camera jumping" issue
+            controls.enabled = false;
+            
+            if (!isUserRotatingCamera && (now - lastManualRotationTime > 1000)) {
+                const rotationFactor = 0.08; 
+                controls.rotateLeft(joystickMoveVector.x * rotationFactor);
+            }
         }
+    } else {
+        // Re-enable controls if we stop moving
+        controls.enabled = true;
     }
 
     moveDirection.normalize();
@@ -706,8 +743,10 @@ function moveAvatar() {
         else if (keys['KeyS']) rotationOffset = Math.PI;
     }
 
-    // Only rotate avatar if we are moving
-    if (moveDirection.length() > 0.01) {
+    // Character rotation logic
+    const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    // On desktop, character follows camera. On mobile, character only rotates when moving.
+    if (!isMobileDevice || moveDirection.length() > 0.01) {
         avatarGroup.rotation.y = Math.atan2(forward.x, forward.z) + Math.PI + rotationOffset;
     }
 
@@ -1172,6 +1211,7 @@ document.getElementById('btn-ghost').addEventListener('click', (e) => {
         controls.target.copy(avatarGroup.position);
         controls.target.y += currentHeadHeight;
     }
+    syncMobileControls();
 });
 
 // Function to spawn a mesh in front of the camera
