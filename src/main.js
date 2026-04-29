@@ -31,6 +31,9 @@ let vrMoveVector = new THREE.Vector2();
 let vrLookVector = new THREE.Vector2();
 let interactiveGroup;
 let hudMesh, propertiesMesh;
+let vrSprinting = false;
+let vrSliding = false;
+let vrJumping = false;
 
 scene = new THREE.Scene();
 
@@ -802,13 +805,13 @@ function moveAvatar() {
 
     let isMoving = false;
     let isSprinting = false;
-    isCrouching = keys['ControlLeft'] || keys['ControlRight'] || keys['MetaLeft'] || keys['MetaRight'] || isMobileCrouching;
+    isCrouching = keys['ControlLeft'] || keys['ControlRight'] || keys['MetaLeft'] || keys['MetaRight'] || isMobileCrouching || vrSliding;
     let walkSpeed = 0.02;
 
     // Auto-sprint on mobile if joystick is pushed far
     const isJoystickSprinting = joystickMoveVector.length() > 0.8;
 
-    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1)) {
+    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting || vrSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1 || (renderer.xr.isPresenting && vrMoveVector.length() > 0.1))) {
         isSprinting = true;
     }
 
@@ -928,7 +931,7 @@ function moveAvatar() {
     }
 
     // Jump logic
-    if ((keys['Space'] || isMobileJumping) && isGrounded) {
+    if ((keys['Space'] || isMobileJumping || vrJumping) && isGrounded) {
         verticalVelocity = jumpForce;
         isGrounded = false;
     }
@@ -1801,15 +1804,30 @@ let lastTime = performance.now();
 function updateVRInput() {
     vrMoveVector.set(0, 0);
     vrLookVector.set(0, 0);
+    vrSprinting = false;
+    vrSliding = false;
+    vrJumping = false;
     
     const session = renderer.xr.getSession();
     if (session) {
         for (const source of session.inputSources) {
             if (source.gamepad) {
                 const axes = source.gamepad.axes;
+                const buttons = source.gamepad.buttons;
+                
                 // WebXR standard gamepad mapping: axes[2] is horizontal, axes[3] is vertical
                 if (source.handedness === 'left') {
                     vrMoveVector.set(axes[2], -axes[3]);
+                    
+                    // Left Grip (Squeeze) for Sprint
+                    if (buttons[1] && buttons[1].pressed) vrSprinting = true;
+                    
+                    // Button X (buttons[4]) for Slide/Crouch
+                    if (buttons[4] && buttons[4].pressed) vrSliding = true;
+                    
+                    // Button Y (buttons[5]) for Jump
+                    if (buttons[5] && buttons[5].pressed) vrJumping = true;
+
                 } else if (source.handedness === 'right') {
                     vrLookVector.set(axes[2], -axes[3]);
                 }
