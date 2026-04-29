@@ -183,7 +183,7 @@ scene.add(ambientLight);
 
 //add hdr for a natural light
 const loader = new UltraHDRLoader();
-const texture = await loader.loadAsync( '/models/textures/pav_studio_02_1k.jpg' );
+const texture = await loader.loadAsync( '/models/textures/citrus_orchard_road_puresky_1k.jpg' );
 texture.mapping = THREE.EquirectangularReflectionMapping;
 scene.background = texture;
 scene.environment = texture;
@@ -849,20 +849,21 @@ function moveAvatar() {
     }
 
 
+    // Fast spatial filter without allocating new arrays - REUSED for both wall and floor
+    _nearbyMeshes.length = 0;
+    for (let i = 0; i < collisionMeshes.length; i++) {
+        const m = collisionMeshes[i];
+        m.getWorldPosition(_tempVec);
+        if (m.userData.isMap || _tempVec.distanceToSquared(avatarGroup.position) < 1600) { 
+            _nearbyMeshes.push(m);
+        }
+    }
+
     // Wall collision detection
     if (_moveDirection.length() > 0) {
         _wallRayPos.copy(avatarGroup.position);
         _wallRayPos.y += 0.8;
         raycasterWall.set(_wallRayPos, _moveDirection);
-        
-        // Fast spatial filter without allocating new arrays
-        _nearbyMeshes.length = 0;
-        for(let i=0; i<collisionMeshes.length; i++) {
-            const m = collisionMeshes[i];
-            if (m.userData.isMap || m.position.distanceToSquared(avatarGroup.position) < 400) {
-                _nearbyMeshes.push(m);
-            }
-        }
 
         let wallIntersections = raycasterWall.intersectObjects(_nearbyMeshes, false);
         
@@ -903,15 +904,6 @@ function moveAvatar() {
     _floorRayPos.y += 1.5;
     raycasterAvatar.set(_floorRayPos, _downVector);
  
-    // Reuse spatial filter
-    _nearbyMeshes.length = 0;
-    for(let i=0; i<collisionMeshes.length; i++) {
-        const m = collisionMeshes[i];
-        if (m.userData.isMap || m.position.distanceToSquared(avatarGroup.position) < 400) {
-            _nearbyMeshes.push(m);
-        }
-    }
-
     let floorIntersections = raycasterAvatar.intersectObjects(_nearbyMeshes, false);
     
     // Pick the first horizontal surface
