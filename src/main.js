@@ -183,10 +183,19 @@ scene.environment = texture;
 let map = new THREE.Group();
 let mapLoaded = false;
 
-// collision objects array
-let groupCollisionObjects = [];
-// We push the 'map' group. Once the GLB loads, its meshes will be inside this group and intersected recursively.
-groupCollisionObjects.push(map);
+// collision meshes array (flat list for faster raycasting)
+let collisionMeshes = [];
+let lastCollisionUpdate = 0;
+
+function updateCollisionMeshes() {
+    collisionMeshes = [];
+    scene.traverse((obj) => {
+        if (obj.isMesh && (obj.userData.isMap || obj.userData.collision)) {
+            collisionMeshes.push(obj);
+        }
+    });
+}
+
 
 // --- Map Manager State ---
 let activeMapName = localStorage.getItem('activeMap') || 'CharlyVerse';
@@ -264,9 +273,10 @@ function switchMap(mapName, isBuiltin = false) {
 
     const onLoad = (gltf) => {
         map.add(gltf.scene);
+        gltf.scene.traverse(n => { if(n.isMesh) n.userData.isMap = true; });
         if (!scene.children.includes(map)) scene.add(map);
-        if (!groupCollisionObjects.includes(map)) groupCollisionObjects.push(map);
         mapLoaded = true;
+        updateCollisionMeshes();
 
         applyMapTransform(mapName);
 
@@ -280,16 +290,15 @@ function switchMap(mapName, isBuiltin = false) {
         }
 
         if (!savedSpawn) {
-            // No spawn point — place at model origin (0,0,0) in ghost mode with gizmo
+            // No spawn point — place at model origin (0,0,0) and enter edit mode
             avatarGroup.position.set(0, 0, 0);
             camera.position.set(0, 2, 5);
             controls.target.set(0, 0, 0);
             
-            enterMapEditMode(); // This attaches the gizmo and sets isGhostMode
+            enterMapEditMode();
             
             document.getElementById('map-edit-toast-msg').innerHTML =
                 '🗺️ Bienvenue ! Placez votre map ou déplacez-vous, puis cliquez sur <strong>Set Respawn</strong> pour définir votre point d\'apparition.';
-            document.getElementById('map-edit-toast').classList.remove('hidden');
         } else {
             const spawnPos = JSON.parse(savedSpawn);
             avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
@@ -765,12 +774,12 @@ function moveAvatar() {
 
     // Wall collision detection
     if (moveDirection.length() > 0) {
-        // Lift the ray origin to avoid hitting the floor and low steps (allows climbing stairs)
-        let wallRayPos = avatarGroup.position.clone();
-        wallRayPos.y += 0.8;
-
+        // Reuse vectors to avoid GC pressure
+        const wallRayPos = avatarGroup.position.clone().add({x:0, y:0.8, z:0});
         raycasterWall.set(wallRayPos, moveDirection);
-        let wallIntersections = raycasterWall.intersectObjects(groupCollisionObjects, true);
+        
+        // Use non-recursive intersection on pre-filtered flat mesh list
+        let wallIntersections = raycasterWall.intersectObjects(collisionMeshes, false);
 
         // Filter out the avatar itself AND floors from wall collisions
         wallIntersections = wallIntersections.filter(intersect => {
@@ -808,13 +817,11 @@ function moveAvatar() {
     avatarGroup.position.y += verticalVelocity;
 
     // Floor detection with raycast
-    // We fire the ray from around head height to detect stairs we just stepped over horizontally
-    let rayPos = avatarGroup.position.clone();
-    rayPos.y += 1.5;
+    const rayPos = avatarGroup.position.clone().add({x:0, y:1.5, z:0});
     raycasterAvatar.set(rayPos, new THREE.Vector3(0, -1, 0));
 
-    // Get all intersections with the floor/map and filter out ceilings/walls
-    let floorIntersections = raycasterAvatar.intersectObjects(groupCollisionObjects, true).filter(
+    // Use non-recursive intersection
+    let floorIntersections = raycasterAvatar.intersectObjects(collisionMeshes, false).filter(
         intersect => intersect.face && intersect.face.normal.y > 0.5
     );
 
@@ -1083,6 +1090,7 @@ document.getElementById('btn-collision-toggle').addEventListener('click', (e) =>
             e.target.textContent = 'Collision: ON';
             e.target.classList.add('collision-on');
         }
+        updateCollisionMeshes();
         saveWorld();
     }
 });
@@ -1112,6 +1120,7 @@ document.getElementById('btn-delete').addEventListener('click', () => {
         
         currentPlacedObject = null;
         updatePropertiesMenu(null);
+        updateCollisionMeshes();
         saveWorld();
     }
 });
@@ -1246,6 +1255,7 @@ function spawnObject(mesh, type, fileName = null) {
     transformControls.attach(mesh);
     updatePropertiesMenu(mesh);
     
+    updateCollisionMeshes();
     document.getElementById('add-glb-modal').classList.add('hidden');
     saveWorld();
 }
@@ -1405,8 +1415,11 @@ initDB().then(() => {
     switchMap(activeEntry.name, activeEntry.isBuiltin);
 });
 
+const clock = new THREE.Clock();
+
 function animate() {
     requestAnimationFrame(animate);
+    const delta = clock.getDelta();
 
     let oldAvatarPos = avatarGroup.position.clone();
 
@@ -1429,13 +1442,11 @@ function animate() {
         deltaPos.y += step;
         camera.position.add(deltaPos);
 
-        // Update controls target to follow avatar, but only if not doing look-around?
-        // Actually, for OrbitControls to work while moving, we MUST update target.
-        // The rotation is maintained relative to the target by OrbitControls.
+        // Update controls target to follow avatar
         controls.target.copy(avatarGroup.position);
         controls.target.y += currentHeadHeight;
     } else {
-        // In ghost mode, the target must stay in front of the camera to allow "first person" style rotation
+        // In ghost mode, the target must stay in front of the camera
         const fwd = new THREE.Vector3();
         camera.getWorldDirection(fwd);
         controls.target.copy(camera.position).add(fwd);
@@ -1443,7 +1454,7 @@ function animate() {
 
     controls.update();
 
-    // Zoom logic: 1st vs 3rd person (only when not in ghost mode)
+    // Zoom logic: 1st vs 3rd person
     if (!isGhostMode) {
         if (controls.getDistance() < 1) {
             if (avatar) avatar.visible = false;
@@ -1453,10 +1464,9 @@ function animate() {
     }
 
     renderer.render(scene, camera);
-    if (mixer) mixer.update(1 / 90);
+    if (mixer) mixer.update(delta);
 }
 animate();
-
 
 //resize canvas
 window.addEventListener('resize', () => {
