@@ -280,16 +280,13 @@ function switchMap(mapName, isBuiltin = false) {
         }
 
         if (!savedSpawn) {
-            // No spawn point — place at model origin (0,0,0) in ghost mode
+            // No spawn point — place at model origin (0,0,0) in ghost mode with gizmo
             avatarGroup.position.set(0, 0, 0);
             camera.position.set(0, 2, 5);
             controls.target.set(0, 0, 0);
             
-            isGhostMode = true;
-            if (avatar) avatar.visible = false;
-            document.getElementById('btn-ghost').classList.add('active');
-            syncMobileControls();
-
+            enterMapEditMode(); // This attaches the gizmo and sets isGhostMode
+            
             document.getElementById('map-edit-toast-msg').innerHTML =
                 '🗺️ Bienvenue ! Placez votre map ou déplacez-vous, puis cliquez sur <strong>Set Respawn</strong> pour définir votre point d\'apparition.';
             document.getElementById('map-edit-toast').classList.remove('hidden');
