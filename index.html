@@ -30,9 +30,12 @@
     </div>
     
     <div id="properties-menu" class="hidden">
-      <h3 style="margin: 0 0 10px 0; font-size: 16px;">Propriétés de l'objet</h3>
-
-      <div class="gizmo-mode-bar">
+      <div id="properties-header">
+        <span id="properties-title">Modifier l'objet</span>
+        <span id="properties-toggle-icon">▼</span>
+      </div>
+      <div id="properties-content">
+        <div class="gizmo-mode-bar">
         <button id="btn-mode-translate" class="gizmo-mode-btn active" title="Déplacer (G)">&#x2725; Move</button>
         <button id="btn-mode-rotate" class="gizmo-mode-btn" title="Rotation (R)">&#x21BB; Rotate</button>
         <button id="btn-mode-scale" class="gizmo-mode-btn" title="Scale (S)">&#x2922; Scale</button>
@@ -95,6 +98,7 @@
       <button id="btn-collision-toggle" class="hud-btn" style="width: 100%; margin-top: 10px; transition: background-color 0.3s;">Collision: OFF</button>
       <button id="btn-collision-type" class="hud-btn" style="width: 100%; margin-top: 5px;">Shape: MESH</button>
       <button id="btn-delete" class="hud-btn" style="width: 100%; margin-top: 10px; background: #ff3b30; border-color: #ff3b30;">🗑️ Supprimer l'objet</button>
+      </div>
     </div>
 
     <!-- Add Object Modal -->

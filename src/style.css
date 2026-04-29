@@ -204,16 +204,57 @@ p {
   position: absolute;
   top: 20px;
   right: 20px;
-  background: rgba(0, 0, 0, 0.6);
-  backdrop-filter: blur(10px);
-  padding: 20px;
+  background: rgba(0, 0, 0, 0.75);
+  backdrop-filter: blur(15px);
   border-radius: 15px;
   z-index: 100;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.4);
   color: white;
   font-family: var(--sans);
-  width: 250px;
+  width: 280px;
+  overflow: hidden;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+#properties-header {
+  padding: 12px 20px;
+  background: rgba(255, 255, 255, 0.05);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  cursor: pointer;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  font-weight: 600;
+  font-size: 14px;
+}
+
+#properties-header:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+#properties-content {
+  padding: 20px;
+  max-height: 80vh;
+  overflow-y: auto;
+  transition: max-height 0.3s ease-out, opacity 0.2s;
+}
+
+#properties-menu.collapsed #properties-content {
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+#properties-menu.collapsed #properties-toggle-icon {
+  transform: rotate(-90deg);
+}
+
+#properties-toggle-icon {
+  transition: transform 0.3s ease;
+  font-size: 10px;
 }
 
 .prop-row {

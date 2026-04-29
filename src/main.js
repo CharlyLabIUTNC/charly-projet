@@ -1065,6 +1065,10 @@ btnUniformScale.addEventListener('click', () => {
     btnUniformScale.classList.toggle('active', isUniformScale);
 });
 
+document.getElementById('properties-header').addEventListener('click', () => {
+    propMenu.classList.toggle('collapsed');
+});
+
 function updatePropertiesMenu(object) {
     if (!object) {
         propMenu.classList.add('hidden');
@@ -1376,6 +1380,7 @@ function spawnObject(mesh, type, fileName = null) {
     document.getElementById('add-glb-modal').classList.add('hidden');
     saveWorld();
 }
+
 
 document.getElementById('btn-add-glb').addEventListener('click', () => {
     document.getElementById('add-glb-modal').classList.remove('hidden');
