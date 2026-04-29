@@ -5,13 +5,32 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
+import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
+import { InteractiveGroup } from 'three/examples/jsm/interactive/InteractiveGroup.js';
+import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 
 // Setup BVH for all geometries
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
+ 
+// Fix for WebXR Emulator / Polyfill: hide XRWebGLBinding to avoid type errors
+// only if we are NOT on a real headset (Meta Quest, etc.)
+if (typeof window !== 'undefined' && window.XRWebGLBinding && !/OculusBrowser|PicoBrowser/i.test(navigator.userAgent)) {
+    try {
+        console.log("WebXR Emulator/Polyfill detected or suspected, applying XRWebGLBinding hack");
+        Object.defineProperty(window, 'XRWebGLBinding', { value: undefined, configurable: true });
+    } catch (e) {}
+}
 
 let scene, camera, renderer;
+let controller1, controller2;
+let controllerGrip1, controllerGrip2;
+let vrMoveVector = new THREE.Vector2();
+let vrLookVector = new THREE.Vector2();
+let interactiveGroup;
+let hudMesh, propertiesMesh;
 
 scene = new THREE.Scene();
 
@@ -452,7 +471,7 @@ function updateMapInventoryUI() {
 
 // group for the avatar
 let avatarGroup = new THREE.Group();
-scene.add(avatarGroup);
+// will be added to interactiveGroup later
 
 // Load spawn point if it exists
 let savedSpawn = localStorage.getItem('spawnPoint');
@@ -738,6 +757,8 @@ btnJump.addEventListener('touchend', () => {
 
 // keyboard movement function
 function moveAvatar() {
+    const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isGhostMode) {
         _flyDir.set(0, 0, 0);
         camera.getWorldDirection(_fwd);
@@ -756,7 +777,6 @@ function moveAvatar() {
             _flyDir.addScaledVector(_right, joystickMoveVector.x);
         }
         
-        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isMobile) {
             controls.enabled = false;
         }
@@ -812,53 +832,63 @@ function moveAvatar() {
 
     _moveDirection.set(0, 0, 0);
 
-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-    if (!isMobile) {
-        if (keys['KeyW']) _moveDirection.add(_fwd);
-        if (keys['KeyS']) _moveDirection.sub(_fwd);
-        if (keys['KeyA']) _moveDirection.sub(_right);
-        if (keys['KeyD']) _moveDirection.add(_right);
-    } else {
-        if (joystickMoveVector.length() > 0.1) {
-            _moveDirection.addScaledVector(_fwd, joystickMoveVector.y);
-            _moveDirection.addScaledVector(_right, joystickMoveVector.x);
-            
-            const now = Date.now();
-            controls.enabled = false;
-            
-            if (!isUserRotatingCamera && (now - lastManualRotationTime > 1000)) {
-                const rotationFactor = 0.08; 
-                controls.rotateLeft(joystickMoveVector.x * rotationFactor);
-            }
-        } else {
-            controls.enabled = true;
+    if (renderer.xr.isPresenting) {
+        // VR Movement
+        if (vrMoveVector.length() > 0.1) {
+            _moveDirection.addScaledVector(_fwd, vrMoveVector.y);
+            _moveDirection.addScaledVector(_right, vrMoveVector.x);
         }
-    }
-
-    _moveDirection.normalize();
-
-    // Calculate rotation offset for strafing (moving left/right)
-    let rotationOffset = 0;
-    
-    // If using joystick, rotation is directly from vector
-    if (joystickMoveVector.length() > 0.1) {
-        rotationOffset = -Math.atan2(joystickMoveVector.x, joystickMoveVector.y);
+        if (Math.abs(vrLookVector.x) > 0.1) {
+            avatarGroup.rotation.y -= vrLookVector.x * 0.05;
+        }
+        _moveDirection.normalize();
+        // Skip rotationOffset and camera-sync logic in VR
     } else {
-        if (keys['KeyA'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = Math.PI / 2;
-        else if (keys['KeyD'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = -Math.PI / 2;
-        else if (keys['KeyA'] && keys['KeyW']) rotationOffset = Math.PI / 4;
-        else if (keys['KeyD'] && keys['KeyW']) rotationOffset = -Math.PI / 4;
-        else if (keys['KeyA'] && keys['KeyS']) rotationOffset = 3 * Math.PI / 4;
-        else if (keys['KeyD'] && keys['KeyS']) rotationOffset = -3 * Math.PI / 4;
-        else if (keys['KeyS']) rotationOffset = Math.PI;
-    }
+        // Standard Movement
+        if (!isMobileDevice) {
+            if (keys['KeyW']) _moveDirection.add(_fwd);
+            if (keys['KeyS']) _moveDirection.sub(_fwd);
+            if (keys['KeyA']) _moveDirection.sub(_right);
+            if (keys['KeyD']) _moveDirection.add(_right);
+        } else if (isMobileDevice) {
+            if (joystickMoveVector.length() > 0.1) {
+                _moveDirection.addScaledVector(_fwd, joystickMoveVector.y);
+                _moveDirection.addScaledVector(_right, joystickMoveVector.x);
+                
+                const now = Date.now();
+                controls.enabled = false;
+                
+                if (!isUserRotatingCamera && (now - lastManualRotationTime > 1000)) {
+                    const rotationFactor = 0.08; 
+                    controls.rotateLeft(joystickMoveVector.x * rotationFactor);
+                }
+            } else {
+                controls.enabled = true;
+            }
+        }
 
-    // Character rotation logic
-    const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    // On desktop, character follows camera. On mobile, character only rotates when moving.
-    if (!isMobileDevice || _moveDirection.length() > 0.01) {
-        avatarGroup.rotation.y = Math.atan2(_fwd.x, _fwd.z) + Math.PI + rotationOffset;
+        _moveDirection.normalize();
+
+        // Calculate rotation offset for strafing (moving left/right)
+        let rotationOffset = 0;
+        
+        // If using joystick, rotation is directly from vector
+        if (joystickMoveVector.length() > 0.1) {
+            rotationOffset = -Math.atan2(joystickMoveVector.x, joystickMoveVector.y);
+        } else {
+            if (keys['KeyA'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = Math.PI / 2;
+            else if (keys['KeyD'] && !keys['KeyW'] && !keys['KeyS']) rotationOffset = -Math.PI / 2;
+            else if (keys['KeyA'] && keys['KeyW']) rotationOffset = Math.PI / 4;
+            else if (keys['KeyD'] && keys['KeyW']) rotationOffset = -Math.PI / 4;
+            else if (keys['KeyA'] && keys['KeyS']) rotationOffset = 3 * Math.PI / 4;
+            else if (keys['KeyD'] && keys['KeyS']) rotationOffset = -3 * Math.PI / 4;
+            else if (keys['KeyS']) rotationOffset = Math.PI;
+        }
+
+        // Character rotation logic
+        if (!isMobileDevice || _moveDirection.length() > 0.01) {
+            avatarGroup.rotation.y = Math.atan2(_fwd.x, _fwd.z) + Math.PI + rotationOffset;
+        }
     }
 
 
@@ -985,12 +1015,180 @@ function moveAvatar() {
     fadeToAction(targetAnimation, 0.2);
 }
 
+const glCanvas = document.getElementById('app');
+if (!glCanvas) console.error("Canvas #app not found!");
+
 renderer = new THREE.WebGLRenderer({
-    canvas: document.querySelector('canvas'),
-    antialias: true
+    canvas: glCanvas,
+    antialias: false,
+    alpha: true
 });
+renderer.xr.enabled = true;
 renderer.setSize(window.innerWidth, window.innerHeight);
-renderer.render(scene, camera);
+renderer.setPixelRatio(window.devicePixelRatio);
+
+document.body.appendChild(VRButton.createButton(renderer));
+
+// --- VR Controllers ---
+const controllerModelFactory = new XRControllerModelFactory();
+
+controller1 = renderer.xr.getController(0);
+controller1.addEventListener('selectstart', onSelectStart);
+controller1.addEventListener('selectend', onSelectEnd);
+scene.add(controller1);
+
+controller2 = renderer.xr.getController(1);
+controller2.addEventListener('selectstart', onSelectStart);
+controller2.addEventListener('selectend', onSelectEnd);
+scene.add(controller2);
+
+const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+const rayLine = new THREE.Line(rayGeometry);
+rayLine.name = 'ray';
+rayLine.scale.z = 5;
+
+controller1.add(rayLine.clone());
+controller2.add(rayLine.clone());
+
+controllerGrip1 = renderer.xr.getControllerGrip(0);
+controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
+scene.add(controllerGrip1);
+
+controllerGrip2 = renderer.xr.getControllerGrip(1);
+controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
+scene.add(controllerGrip2);
+
+renderer.xr.addEventListener('sessionstart', () => {
+    if (avatar) avatar.visible = false;
+    
+    // Attach everything to avatarGroup so head and hands move with it
+    avatarGroup.add(camera);
+    avatarGroup.add(controller1);
+    avatarGroup.add(controller2);
+    avatarGroup.add(controllerGrip1);
+    avatarGroup.add(controllerGrip2);
+    
+    if (hudMesh) {
+        hudMesh.visible = true;
+        controller1.add(hudMesh); 
+        hudMesh.position.set(0, 0.1, 0); // Position it on top of the left controller
+        hudMesh.rotation.x = -Math.PI / 2; // Flat on the controller
+    }
+    
+    controls.enabled = false; // Disable OrbitControls in VR
+});
+
+renderer.xr.addEventListener('sessionend', () => {
+    if (avatar) avatar.visible = true;
+    
+    // Move back to scene
+    scene.add(camera);
+    scene.add(controller1);
+    scene.add(controller2);
+    scene.add(controllerGrip1);
+    scene.add(controllerGrip2);
+    
+    if (hudMesh) {
+        hudMesh.visible = false;
+        scene.add(hudMesh);
+    }
+    if (propertiesMesh) {
+        propertiesMesh.visible = false;
+        scene.add(propertiesMesh);
+    }
+    
+    controls.enabled = true;
+});
+
+// --- VR Interaction Setup ---
+interactiveGroup = new InteractiveGroup(renderer, camera);
+scene.add(interactiveGroup);
+interactiveGroup.add(avatarGroup);
+
+const hudElement = document.getElementById('hud');
+hudMesh = new HTMLMesh(hudElement);
+hudMesh.position.set(0.15, 0.05, -0.15); // Offset from controller
+hudMesh.rotation.x = -Math.PI / 4;
+hudMesh.scale.setScalar(0.25);
+hudMesh.visible = false;
+interactiveGroup.add(hudMesh);
+
+const propsElement = document.getElementById('properties-menu');
+propertiesMesh = new HTMLMesh(propsElement);
+propertiesMesh.position.set(-0.15, 0.05, -0.15); // Offset from controller
+propertiesMesh.rotation.x = -Math.PI / 4;
+propertiesMesh.scale.setScalar(0.3);
+propertiesMesh.visible = false;
+interactiveGroup.add(propertiesMesh);
+
+// --- VR Interaction Logic ---
+let vrGrabbedObject = null;
+const vrRaycaster = new THREE.Raycaster();
+
+function onSelectStart(event) {
+    const controller = event.target;
+    const intersections = getIntersections(controller);
+    
+    if (intersections.length > 0) {
+        let intersection = intersections[0];
+        let object = intersection.object;
+        
+        // Handle HTMLMesh clicks (Handled automatically by InteractiveGroup, but we might need to block object selection)
+        if (object instanceof HTMLMesh) return;
+
+        while (object.parent && object.parent !== scene && !object.userData.isSelectable) {
+            object = object.parent;
+        }
+        
+        if (object.userData && object.userData.isSelectable) {
+            currentPlacedObject = object;
+            vrGrabbedObject = object;
+            updatePropertiesMenu(currentPlacedObject);
+            if (transformControls) transformControls.detach();
+        }
+    }
+}
+
+function onSelectEnd() {
+    vrGrabbedObject = null;
+    saveWorld();
+}
+
+function getIntersections(controller) {
+    const tempMatrix = new THREE.Matrix4();
+    tempMatrix.identity().extractRotation(controller.matrixWorld);
+    vrRaycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+    vrRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+    const selectableObjects = [];
+    scene.traverse((obj) => {
+        if (obj.userData && obj.userData.isSelectable) selectableObjects.push(obj);
+    });
+    return vrRaycaster.intersectObjects(selectableObjects, true);
+}
+
+function updateVRGrab() {
+    if (vrGrabbedObject) {
+        const controller = (controller1.add === vrGrabbedObject.parent) ? controller1 : controller2;
+        // If we want the object to follow the controller's ray
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.identity().extractRotation(controller2.matrixWorld);
+        const dir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
+        const pos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
+        
+        // Move object to a distance in front of controller
+        vrGrabbedObject.position.copy(pos).addScaledVector(dir, 2);
+        
+        // Basic snapping for VR grab
+        const groundRay = new THREE.Raycaster(vrGrabbedObject.position, new THREE.Vector3(0, -1, 0));
+        const hits = groundRay.intersectObjects(collisionMeshes, false);
+        if (hits.length > 0) {
+            vrGrabbedObject.position.y = hits[0].point.y;
+        }
+        
+        updatePropertiesMenu(vrGrabbedObject);
+    }
+}
 
 // --- HUD & Interaction Logic ---
 
@@ -1077,9 +1275,15 @@ document.getElementById('properties-header').addEventListener('click', () => {
 function updatePropertiesMenu(object) {
     if (!object) {
         propMenu.classList.add('hidden');
+        if (propertiesMesh) propertiesMesh.visible = false;
         return;
     }
     propMenu.classList.remove('hidden');
+    
+    if (renderer.xr.isPresenting && propertiesMesh) {
+        propertiesMesh.visible = true;
+        controller2.add(propertiesMesh); // Attach to right hand
+    }
     ['x', 'y', 'z'].forEach(axis => {
         const val = object.position[axis].toFixed(2);
         propInputs[axis].slider.value = val;
@@ -1568,7 +1772,9 @@ mapDropZone.addEventListener('drop', async (e) => {
 });
 
 // Initialise IndexedDB puis charge le monde sauvegardé
+console.log("Starting initialization...");
 initDB().then(() => {
+    console.log("IndexedDB initialized");
     updateInventoryUI();
     
     // Ensure CharlyVerse is in map inventory
@@ -1580,7 +1786,10 @@ initDB().then(() => {
     
     // Load the active map
     const activeEntry = inv.find(m => m.name === activeMapName) || { name: 'CharlyVerse', isBuiltin: true };
+    console.log(`Loading map: ${activeEntry.name}`);
     switchMap(activeEntry.name, activeEntry.isBuiltin);
+}).catch(err => {
+    console.error("Initialization failed:", err);
 });
 
 const stats = new Stats();
@@ -1589,10 +1798,31 @@ document.body.appendChild(stats.dom);
 // Use a simple timer if Clock/Timer is problematic
 let lastTime = performance.now();
 
+function updateVRInput() {
+    vrMoveVector.set(0, 0);
+    vrLookVector.set(0, 0);
+    
+    const session = renderer.xr.getSession();
+    if (session) {
+        for (const source of session.inputSources) {
+            if (source.gamepad) {
+                const axes = source.gamepad.axes;
+                // WebXR standard gamepad mapping: axes[2] is horizontal, axes[3] is vertical
+                if (source.handedness === 'left') {
+                    vrMoveVector.set(axes[2], -axes[3]);
+                } else if (source.handedness === 'right') {
+                    vrLookVector.set(axes[2], -axes[3]);
+                }
+            }
+        }
+    }
+}
+
 function animate() {
-    requestAnimationFrame(animate);
     stats.begin();
     
+    updateVRInput();
+    updateVRGrab();
     const time = performance.now();
     const delta = Math.min((time - lastTime) / 1000, 0.1); // Cap delta to avoid huge jumps
     lastTime = time;
@@ -1613,22 +1843,24 @@ function animate() {
     let step = heightDiff * 0.1;
     currentHeadHeight += step;
 
-    if (!isGhostMode) {
+    if (!isGhostMode && !renderer.xr.isPresenting) {
         // Move the camera by the exact same amount the avatar moved
         _deltaPos.y += step;
         camera.position.add(_deltaPos);
-
+        
         // Update controls target to follow avatar
         controls.target.copy(avatarGroup.position);
         controls.target.y += currentHeadHeight;
-    } else {
+    } else if (isGhostMode) {
         // In ghost mode, the target must stay in front of the camera
         const fwd = new THREE.Vector3();
         camera.getWorldDirection(fwd);
         controls.target.copy(camera.position).add(fwd);
     }
 
-    controls.update();
+    if (!renderer.xr.isPresenting) {
+        controls.update();
+    }
 
     // Zoom logic: 1st vs 3rd person
     if (!isGhostMode) {
@@ -1644,10 +1876,11 @@ function animate() {
     
     stats.end();
 }
-animate();
+renderer.setAnimationLoop(animate);
 
 //resize canvas
 window.addEventListener('resize', () => {
+    if (renderer.xr.isPresenting) return;
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
