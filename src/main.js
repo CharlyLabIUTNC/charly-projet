@@ -174,7 +174,7 @@ scene.add(ambientLight);
 
 //add hdr for a natural light
 const loader = new UltraHDRLoader();
-const texture = await loader.loadAsync( '/models/textures/newman_lobby_1k.jpg' );
+const texture = await loader.loadAsync( '/models/textures/pav_studio_02_1k.jpg' );
 texture.mapping = THREE.EquirectangularReflectionMapping;
 scene.background = texture;
 scene.environment = texture;
@@ -232,6 +232,7 @@ function enterMapEditMode() {
     document.getElementById('btn-delete').style.display = 'none';
     setGizmoMode('translate');
     updatePropertiesMenu(map);
+    syncMobileControls();
 }
 
 function exitMapEditMode() {
@@ -248,6 +249,7 @@ function exitMapEditMode() {
     updateMapInventoryUI();
     // Restore object panel if something was selected, else hide
     updatePropertiesMenu(currentPlacedObject || null);
+    syncMobileControls();
 }
 
 function switchMap(mapName, isBuiltin = false) {
@@ -502,7 +504,7 @@ function syncMobileControls() {
     const actionButtons = document.getElementById('mobile-actions');
     const lookJoystick = document.getElementById('joystick-look-container');
 
-    if (isGhostMode) {
+    if (isGhostMode || isMapEditMode) {
         actionButtons.classList.add('hidden');
         lookJoystick.classList.remove('hidden');
     } else {
@@ -640,6 +642,12 @@ function moveAvatar() {
         if (joystickMoveVector.length() > 0.1) {
             flyDir.addScaledVector(fwd, joystickMoveVector.y);
             flyDir.addScaledVector(right, joystickMoveVector.x);
+        }
+        
+        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+        if (isMobile) {
+            // Block manual OrbitControls rotation in Ghost mode on mobile
+            controls.enabled = false;
         }
         
         // Look Joystick in Ghost Mode - Uniform control
