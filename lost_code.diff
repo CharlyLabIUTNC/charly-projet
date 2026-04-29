@@ -1,0 +1,1032 @@
+diff --git a/src/main.js b/src/main.js
+index 5b346a9..e7a1e31 100644
+--- a/src/main.js
++++ b/src/main.js
+@@ -4,6 +4,11 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
+ import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
+ import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
+ 
++// Global temporary vector to avoid allocations
++const _tmpVec = new THREE.Vector3();
++let avatarMoved = false; // set each frame in moveAvatar
++const clock = new THREE.Clock();
++
+ let scene, camera, renderer;
+ 
+ scene = new THREE.Scene();
+@@ -230,12 +235,15 @@ function applyMapTransform(name) {
+ 
+ function enterMapEditMode() {
+     isMapEditMode = true;
+-    isGhostMode = true;
+-    if (avatar) avatar.visible = false;
+-    controls.enablePan = true;
+-    document.getElementById('btn-ghost').classList.add('active');
+-    transformControls.attach(map);
++    // Show toast & UI for map edit
+     document.getElementById('map-edit-toast').classList.remove('hidden');
++    document.getElementById('map-edit-toast-msg').innerHTML = 'Édition de map activée';
++    // Show gizmo
++    transformControls.setMode('translate');
++    transformControls.attach(avatarGroup);
++    // Disable OrbitControls during map edit to save CPU
++    controls.enabled = false;
++    
+     // Hide object-specific buttons, show the properties panel for the map
+     document.getElementById('btn-collision-toggle').style.display = 'none';
+     document.getElementById('btn-delete').style.display = 'none';
+@@ -246,12 +254,12 @@ function enterMapEditMode() {
+ 
+ function exitMapEditMode() {
+     isMapEditMode = false;
+-    isGhostMode = false;
+-    if (avatar) avatar.visible = true;
+-    controls.enablePan = false;
+-    document.getElementById('btn-ghost').classList.remove('active');
+-    transformControls.detach();
++    // Hide UI, detach gizmo
+     document.getElementById('map-edit-toast').classList.add('hidden');
++    transformControls.detach();
++    // Re‑enable OrbitControls when leaving edit mode (unless ghost mode is active)
++    if (!isGhostMode) controls.enabled = true;
++    
+     document.getElementById('btn-collision-toggle').style.display = '';
+     document.getElementById('btn-delete').style.display = '';
+     saveMapTransform(activeMapName);
+@@ -261,377 +269,8 @@ function exitMapEditMode() {
+     syncMobileControls();
+ }
+ 
+-function switchMap(mapName, isBuiltin = false) {
+-    // Clear current map
+-    while (map.children.length > 0) map.remove(map.children[0]);
+-    map.position.set(0, 0, 0);
+-    map.rotation.set(0, 0, 0);
+-    map.scale.set(1, 1, 1);
+-    mapLoaded = false;
+-    activeMapName = mapName;
+-    localStorage.setItem('activeMap', mapName);
+-
+-    const onLoad = (gltf) => {
+-        map.add(gltf.scene);
+-        gltf.scene.traverse(n => { if(n.isMesh) n.userData.isMap = true; });
+-        if (!scene.children.includes(map)) scene.add(map);
+-        mapLoaded = true;
+-        updateCollisionMeshes();
+-
+-        applyMapTransform(mapName);
+-
+-        // Check spawn point (with backward compat for old 'spawnPoint' key)
+-        const spawnKey = getMapSpawnKey(mapName);
+-        let savedSpawn = localStorage.getItem(spawnKey);
+-        if (!savedSpawn && isBuiltin && localStorage.getItem('spawnPoint')) {
+-            // Migrate old key
+-            savedSpawn = localStorage.getItem('spawnPoint');
+-            localStorage.setItem(spawnKey, savedSpawn);
+-        }
+-
+-        if (!savedSpawn) {
+-            // No spawn point — place at model origin (0,0,0) and enter edit mode
+-            avatarGroup.position.set(0, 0, 0);
+-            camera.position.set(0, 2, 5);
+-            controls.target.set(0, 0, 0);
+-            
+-            enterMapEditMode();
+-            
+-            document.getElementById('map-edit-toast-msg').innerHTML =
+-                '🗺️ Bienvenue ! Placez votre map ou déplacez-vous, puis cliquez sur <strong>Set Respawn</strong> pour définir votre point d\'apparition.';
+-        } else {
+-            const spawnPos = JSON.parse(savedSpawn);
+-            avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+-        }
+-
+-        updateMapInventoryUI();
+-        loadWorld();
+-    };
+-
+-    if (isBuiltin) {
+-        new GLTFLoader().load(`/models/terrain/${mapName}.glb`, onLoad);
+-    } else {
+-        getFileFromDB(mapName).then(arrayBuffer => {
+-            if (arrayBuffer) {
+-                const url = URL.createObjectURL(new Blob([arrayBuffer]));
+-                new GLTFLoader().load(url, (gltf) => { onLoad(gltf); URL.revokeObjectURL(url); });
+-            }
+-        });
+-    }
+-}
+-
+-function updateMapInventoryUI() {
+-    const container = document.getElementById('map-inventory-container');
+-    if (!container) return;
+-    const inv = getMapInventory();
+-    container.innerHTML = '';
+-    inv.forEach(entry => {
+-        const row = document.createElement('div');
+-        row.className = 'map-inventory-row' + (entry.name === activeMapName ? ' active-map' : '');
+-
+-        const label = document.createElement('span');
+-        label.textContent = (entry.isBuiltin ? '🌍 ' : '📂 ') + entry.name;
+-        row.appendChild(label);
+-
+-        const btns = document.createElement('div');
+-        btns.className = 'map-row-btns';
+-
+-        const loadBtn = document.createElement('button');
+-        loadBtn.className = 'hud-btn';
+-        loadBtn.textContent = entry.name === activeMapName ? 'Active' : 'Charger';
+-        loadBtn.disabled = entry.name === activeMapName;
+-        loadBtn.onclick = () => {
+-            document.getElementById('map-modal').classList.add('hidden');
+-            switchMap(entry.name, entry.isBuiltin);
+-        };
+-        btns.appendChild(loadBtn);
+-
+-        const editBtn = document.createElement('button');
+-        editBtn.className = 'hud-btn';
+-        editBtn.textContent = '✏️ Éditer';
+-        editBtn.onclick = () => {
+-            document.getElementById('map-modal').classList.add('hidden');
+-            if (entry.name !== activeMapName) switchMap(entry.name, entry.isBuiltin);
+-            else enterMapEditMode();
+-        };
+-        btns.appendChild(editBtn);
+-
+-        row.appendChild(btns);
+-        container.appendChild(row);
+-    });
+-}
+-
+-// group for the avatar
+-let avatarGroup = new THREE.Group();
+-scene.add(avatarGroup);
+-
+-// Load spawn point if it exists
+-let savedSpawn = localStorage.getItem('spawnPoint');
+-if (savedSpawn) {
+-    try {
+-        let spawnPos = JSON.parse(savedSpawn);
+-        avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+-    } catch (e) {
+-        console.error("Invalid spawn point in localStorage", e);
+-    }
+-}
+-
+-// OrbitControls setup
+-const controls = new OrbitControls(camera, document.querySelector('canvas'));
+-controls.enableDamping = true;
+-controls.dampingFactor = 0.2; // Sharper feel, less inertia
+-controls.minDistance = 0.1; // for 1st person
+-controls.maxDistance = 10;
+-controls.enablePan = false; // we want to orbit around the character only
+-
+-// Reliable detection of manual camera rotation
+-controls.addEventListener('start', () => {
+-    isUserRotatingCamera = true;
+-});
+-controls.addEventListener('end', () => {
+-    isUserRotatingCamera = false;
+-    lastManualRotationTime = Date.now();
+-});
+-
+-const canvas = document.querySelector('canvas');
+-const hideModifiers = (e) => {
+-    Object.defineProperty(e, 'shiftKey', { value: false });
+-    Object.defineProperty(e, 'ctrlKey', { value: false });
+-    Object.defineProperty(e, 'metaKey', { value: false });
+-};
+-canvas.addEventListener('pointerdown', hideModifiers, { capture: true });
+-canvas.addEventListener('pointermove', hideModifiers, { capture: true });
+-canvas.addEventListener('pointerup', hideModifiers, { capture: true });
+-
+-
+-// Physics variables
+-let verticalVelocity = 0;
+-let gravity = 0.005;
+-let isGrounded = false;
+-let jumpForce = 0.2;
+-
+-
+-// State variables for camera
+-let isCrouching = false;
+-let isSliding = false;
+-let isUserRotatingCamera = false;
+-let lastManualRotationTime = 0;
+-let currentHeadHeight = 1.5;
+-
+-// HUD State
+-let isDancing = null;
+-let isGhostMode = false;
+-let currentPlacedObject = null;
+-
+-// avatar raycast to detect collision with the floor direction -y
+-let raycasterAvatar = new THREE.Raycaster();
+-raycasterAvatar.near = 0;
+-raycasterAvatar.far = 2.5; // Increased to reach from head height (1.5) down past the feet (-1.0)
+-
+-// raycast for wall collisions
+-let raycasterWall = new THREE.Raycaster();
+-raycasterWall.near = 0;
+-raycasterWall.far = 0.5; // distance of detection for walls
+-
+-
+-// add avatar glb
+-let avatar = new THREE.Group();
+-
+-let gltf;
+-let mixer;
+-const actions = {};
+-let activeAction = null;
+-
+-function fadeToAction(name, duration) {
+-    if (!actions[name]) return;
+-    const nextAction = actions[name];
+-    if (activeAction !== nextAction) {
+-        if (activeAction) activeAction.fadeOut(duration);
+-        nextAction.reset().fadeIn(duration).play();
+-        activeAction = nextAction;
+-    }
+-}
+-
+-new GLTFLoader().load('/models/avatar/avatar.glb', function (model) {
+-    gltf = model;
+-    avatar.add(gltf.scene);
+-    avatarGroup.add(avatar);
+-    avatar.position.set(0, 0, 0);
+-    avatar.rotateY(Math.PI);
+-    // create an animation mixer for the avatar
+-    mixer = new THREE.AnimationMixer(avatar);
+-
+-    // Store all animations by name
+-    gltf.animations.forEach(animation => {
+-        actions[animation.name] = mixer.clipAction(animation);
+-    });
+-
+-    activeAction = actions['Idle Listening'];
+-    if (activeAction) activeAction.play();
+-});
+-
+-/*
+-list animations : 
+-Crouch_Fwd_Loop
+-Crouch_Idle_Loop
+-Dance Body Roll
+-Dance Charleston
+-Idle Listening
+-Jog_Fwd_Loop
+-Jump_Land
+-Jump_Start
+-Slide_Exit
+-Slide_Loop
+-Slide_Start
+-Sprint_Loop
+-Walk_Loop
+-*/
+-
+-scene.add(avatarGroup);
+-
+-
+-// keyboard controls for the avatar
+-const keys = {};
+-
+-document.addEventListener('keydown', (event) => {
+-    keys[event.code] = true;
+-});
+-
+-document.addEventListener('keyup', (event) => {
+-    keys[event.code] = false;
+-});
+-
+-// --- Mobile Joystick Logic ---
+-const joystickContainer = document.getElementById('joystick-container');
+-// --- Mobile Joysticks Logic ---
+-let joystickMoveVector = new THREE.Vector2(0, 0);
+-let joystickLookVector = new THREE.Vector2(0, 0);
+-let isMobileSprinting = false;
+-let isMobileCrouching = false;
+-let isMobileJumping = false;
+-
+-function syncMobileControls() {
+-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+-    if (!isMobile) return;
+-
+-    const actionButtons = document.getElementById('mobile-actions');
+-    const lookJoystick = document.getElementById('joystick-look-container');
+-
+-    if (isGhostMode || isMapEditMode) {
+-        actionButtons.classList.add('hidden');
+-        lookJoystick.classList.remove('hidden');
+-    } else {
+-        actionButtons.classList.remove('hidden');
+-        lookJoystick.classList.add('hidden');
+-    }
+-}
+-
+ 
+-function setupJoystick(baseId, stickId, onUpdate, onEnd) {
+-    const base = document.getElementById(baseId);
+-    const stick = document.getElementById(stickId);
+-    const container = base.parentElement;
+-    let activeTouchId = null;
+ 
+-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+-        container.classList.remove('hidden');
+-    }
+-
+-    base.addEventListener('touchstart', (e) => {
+-        if (activeTouchId !== null) return;
+-        const touch = e.changedTouches[0];
+-        activeTouchId = touch.identifier;
+-        update(touch);
+-        e.stopPropagation();
+-        if (e.cancelable) e.preventDefault();
+-    }, { passive: false });
+-
+-    window.addEventListener('touchmove', (e) => {
+-        if (activeTouchId === null) return;
+-        for (let i = 0; i < e.changedTouches.length; i++) {
+-            if (e.changedTouches[i].identifier === activeTouchId) {
+-                update(e.changedTouches[i]);
+-                e.stopPropagation();
+-                if (e.cancelable) e.preventDefault();
+-                break;
+-            }
+-        }
+-    }, { passive: false });
+-
+-    const end = (e) => {
+-        if (activeTouchId === null) return;
+-        for (let i = 0; i < e.changedTouches.length; i++) {
+-            if (e.changedTouches[i].identifier === activeTouchId) {
+-                activeTouchId = null;
+-                stick.style.transform = `translate(0, 0)`;
+-                onEnd();
+-                break;
+-            }
+-        }
+-    };
+-
+-    window.addEventListener('touchend', end);
+-    window.addEventListener('touchcancel', end);
+-
+-    function update(touch) {
+-        const rect = base.getBoundingClientRect();
+-        const centerX = rect.left + rect.width / 2;
+-        const centerY = rect.top + rect.height / 2;
+-        const maxDistance = rect.width / 2;
+-
+-        let dx = touch.clientX - centerX;
+-        let dy = touch.clientY - centerY;
+-        const distance = Math.sqrt(dx * dx + dy * dy);
+-
+-        if (distance > maxDistance) {
+-            dx = (dx / distance) * maxDistance;
+-            dy = (dy / distance) * maxDistance;
+-        }
+-
+-        stick.style.transform = `translate(${dx}px, ${dy}px)`;
+-        onUpdate(dx / maxDistance, -dy / maxDistance);
+-    }
+-}
+-
+-setupJoystick('joystick-move-base', 'joystick-move-stick', 
+-    (x, y) => joystickMoveVector.set(x, y),
+-    () => joystickMoveVector.set(0, 0)
+-);
+-
+-setupJoystick('joystick-look-base', 'joystick-look-stick',
+-    (x, y) => joystickLookVector.set(x, y),
+-    () => joystickLookVector.set(0, 0)
+-);
+-
+-// Mobile Action Buttons
+-const mobileActions = document.getElementById('mobile-actions');
+-syncMobileControls();
+-
+-
+-const btnCrouch = document.getElementById('btn-mobile-crouch');
+-btnCrouch.addEventListener('touchstart', (e) => {
+-    isMobileCrouching = true;
+-    btnCrouch.classList.add('active');
+-    e.preventDefault();
+-}, { passive: false });
+-btnCrouch.addEventListener('touchend', () => {
+-    isMobileCrouching = false;
+-    btnCrouch.classList.remove('active');
+-});
+-
+-const btnJump = document.getElementById('btn-mobile-jump');
+-btnJump.addEventListener('touchstart', (e) => {
+-    isMobileJumping = true;
+-    btnJump.classList.add('active');
+-    e.preventDefault();
+-}, { passive: false });
+-btnJump.addEventListener('touchend', () => {
+-    isMobileJumping = false;
+-    btnJump.classList.remove('active');
+-});
+-
+-
+-// keyboard movement function
+ function moveAvatar() {
+     if (isGhostMode) {
+         // Free fly ghost camera
+@@ -879,574 +518,41 @@ function moveAvatar() {
+     }
+ 
+     fadeToAction(targetAnimation, 0.2);
++    avatarMoved = isMoving;
+ }
+ 
+-renderer = new THREE.WebGLRenderer({
+-    canvas: document.querySelector('canvas'),
+-    antialias: true
+-});
+-renderer.setSize(window.innerWidth, window.innerHeight);
+-renderer.render(scene, camera);
+-
+-// --- HUD & Interaction Logic ---
+-
+-// TransformControls setup for Object Placement
+-const transformControls = new TransformControls(camera, renderer.domElement);
+-scene.add(transformControls.getHelper());
+-
+-// Disable OrbitControls while dragging the gizmo
+-transformControls.addEventListener('dragging-changed', function (event) {
+-    controls.enabled = !event.value;
+-});
+-
+-const snapRaycaster = new THREE.Raycaster();
+-transformControls.addEventListener('change', () => {
+-    if (isMapEditMode) {
+-        updatePropertiesMenu(map);
+-        saveMapTransform(activeMapName);
+-        return;
+-    }
+-    if (currentPlacedObject) {
+-        // Snap to floor
+-        let pos = currentPlacedObject.position.clone();
+-        pos.y += 5; // Cast from high up
+-        snapRaycaster.set(pos, new THREE.Vector3(0, -1, 0));
+-        let intersects = snapRaycaster.intersectObjects(groupCollisionObjects, true);
+-        
+-        // Ignore the object itself
+-        intersects = intersects.filter(hit => {
+-            let obj = hit.object;
+-            while (obj) {
+-                if (obj === currentPlacedObject) return false;
+-                obj = obj.parent;
+-            }
+-            return true;
+-        });
+-
+-        if (intersects.length > 0) {
+-            // Only snap if we are dragging horizontally. If user changes Y in menu, we don't want to override it constantly.
+-            // Actually, for simplicity, we'll let it snap if the gizmo is used.
+-            currentPlacedObject.position.y = Math.max(currentPlacedObject.position.y, intersects[0].point.y);
+-        }
+-        updatePropertiesMenu(currentPlacedObject);
+-        saveWorld();
+-    }
+-});
+-
+-// --- Properties Menu Logic ---
+-const propMenu = document.getElementById('properties-menu');
+-const propInputs = ['x', 'y', 'z'].reduce((acc, axis) => {
+-    acc[axis] = {
+-        slider: document.getElementById(`prop-${axis}-slider`),
+-        input: document.getElementById(`prop-${axis}-input`)
+-    };
+-    return acc;
+-}, {});
+-const rotInputs = ['x', 'y', 'z'].reduce((acc, axis) => {
+-    acc[axis] = {
+-        slider: document.getElementById(`prop-r${axis}-slider`),
+-        input: document.getElementById(`prop-r${axis}-input`)
+-    };
+-    return acc;
+-}, {});
+-const scaleInputs = ['x', 'y', 'z'].reduce((acc, axis) => {
+-    acc[axis] = {
+-        slider: document.getElementById(`prop-s${axis}-slider`),
+-        input: document.getElementById(`prop-s${axis}-input`)
+-    };
+-    return acc;
+-}, {});
+-
+-const RAD2DEG = 180 / Math.PI;
+-const DEG2RAD = Math.PI / 180;
+-
+-let isUniformScale = false;
+-const btnUniformScale = document.getElementById('btn-uniform-scale');
+-btnUniformScale.addEventListener('click', () => {
+-    isUniformScale = !isUniformScale;
+-    btnUniformScale.classList.toggle('active', isUniformScale);
+-});
+-
+-function updatePropertiesMenu(object) {
+-    if (!object) {
+-        propMenu.classList.add('hidden');
+-        return;
+-    }
+-    propMenu.classList.remove('hidden');
+-    ['x', 'y', 'z'].forEach(axis => {
+-        const val = object.position[axis].toFixed(2);
+-        propInputs[axis].slider.value = val;
+-        propInputs[axis].input.value = val;
+-    });
+-    ['x', 'y', 'z'].forEach(axis => {
+-        const deg = (object.rotation[axis] * RAD2DEG).toFixed(1);
+-        rotInputs[axis].slider.value = deg;
+-        rotInputs[axis].input.value = deg;
+-    });
+-    ['x', 'y', 'z'].forEach(axis => {
+-        const val = object.scale[axis].toFixed(2);
+-        scaleInputs[axis].slider.value = val;
+-        scaleInputs[axis].input.value = val;
+-    });
+-
+-    const btnCollision = document.getElementById('btn-collision-toggle');
+-    if (groupCollisionObjects.includes(object)) {
+-        btnCollision.textContent = 'Collision: ON';
+-        btnCollision.classList.add('collision-on');
+-    } else {
+-        btnCollision.textContent = 'Collision: OFF';
+-        btnCollision.classList.remove('collision-on');
+-    }
+-}
+-
+-['x', 'y', 'z'].forEach(axis => {
+-    const updatePos = (e) => {
+-        const target = isMapEditMode ? map : currentPlacedObject;
+-        if (target) {
+-            target.position[axis] = parseFloat(e.target.value);
+-            propInputs[axis].slider.value = e.target.value;
+-            propInputs[axis].input.value = e.target.value;
+-            if (isMapEditMode) saveMapTransform(activeMapName);
+-            else saveWorld();
+-        }
+-    };
+-    propInputs[axis].slider.addEventListener('input', updatePos);
+-    propInputs[axis].input.addEventListener('change', updatePos);
+-    
+-    const updateRot = (e) => {
+-        const target = isMapEditMode ? map : currentPlacedObject;
+-        if (target) {
+-            target.rotation[axis] = parseFloat(e.target.value) * DEG2RAD;
+-            rotInputs[axis].slider.value = e.target.value;
+-            rotInputs[axis].input.value = e.target.value;
+-            if (isMapEditMode) saveMapTransform(activeMapName);
+-            else saveWorld();
+-        }
+-    };
+-    rotInputs[axis].slider.addEventListener('input', updateRot);
+-    rotInputs[axis].input.addEventListener('change', updateRot);
+-
+-    const updateScale = (e) => {
+-        const target = isMapEditMode ? map : currentPlacedObject;
+-        if (target) {
+-            const val = Math.max(0.01, parseFloat(e.target.value));
+-            
+-            if (isUniformScale) {
+-                target.scale.set(val, val, val);
+-                ['x', 'y', 'z'].forEach(a => {
+-                    scaleInputs[a].slider.value = val;
+-                    scaleInputs[a].input.value = val;
+-                });
+-            } else {
+-                target.scale[axis] = val;
+-                scaleInputs[axis].slider.value = e.target.value;
+-                scaleInputs[axis].input.value = e.target.value;
+-            }
+-            
+-            if (isMapEditMode) saveMapTransform(activeMapName);
+-            else saveWorld();
+-        }
+-    };
+-    scaleInputs[axis].slider.addEventListener('input', updateScale);
+-    scaleInputs[axis].input.addEventListener('change', updateScale);
+-});
+-
+-// --- Gizmo Mode Buttons ---
+-const gizmoModeBtns = {
+-    translate: document.getElementById('btn-mode-translate'),
+-    rotate:    document.getElementById('btn-mode-rotate'),
+-    scale:     document.getElementById('btn-mode-scale'),
+-};
+-
+-function setGizmoMode(mode) {
+-    transformControls.setMode(mode);
+-    Object.entries(gizmoModeBtns).forEach(([key, btn]) => {
+-        btn.classList.toggle('active', key === mode);
+-    });
+-}
+-
+-gizmoModeBtns.translate.addEventListener('click', () => setGizmoMode('translate'));
+-gizmoModeBtns.rotate.addEventListener('click',    () => setGizmoMode('rotate'));
+-gizmoModeBtns.scale.addEventListener('click',     () => setGizmoMode('scale'));
+-
+-// Keyboard shortcuts: G = move, R = rotate, T = scale
+-window.addEventListener('keydown', (e) => {
+-    if (!currentPlacedObject && !isMapEditMode) return;
+-    if (document.activeElement.tagName === 'INPUT') return; // don't trigger when typing
+-    if (e.code === 'KeyG') setGizmoMode('translate');
+-    if (e.code === 'KeyR') setGizmoMode('rotate');
+-    if (e.code === 'KeyT') setGizmoMode('scale');
+-});
+-
+-document.getElementById('btn-collision-toggle').addEventListener('click', (e) => {
+-    if (currentPlacedObject) {
+-        const idx = groupCollisionObjects.indexOf(currentPlacedObject);
+-        if (idx !== -1) {
+-            groupCollisionObjects.splice(idx, 1);
+-            e.target.textContent = 'Collision: OFF';
+-            e.target.classList.remove('collision-on');
+-        } else {
+-            groupCollisionObjects.push(currentPlacedObject);
+-            e.target.textContent = 'Collision: ON';
+-            e.target.classList.add('collision-on');
+-        }
+-        updateCollisionMeshes();
+-        saveWorld();
+-    }
+-});
+-
+-document.getElementById('btn-delete').addEventListener('click', () => {
+-    if (currentPlacedObject) {
+-        const idx = groupCollisionObjects.indexOf(currentPlacedObject);
+-        if (idx !== -1) {
+-            groupCollisionObjects.splice(idx, 1);
+-        }
+-        
+-        scene.remove(currentPlacedObject);
+-        transformControls.detach();
+-        
+-        currentPlacedObject.traverse((child) => {
+-            if (child.isMesh) {
+-                if (child.geometry) child.geometry.dispose();
+-                if (child.material) {
+-                    if (Array.isArray(child.material)) {
+-                        child.material.forEach(m => m.dispose());
+-                    } else {
+-                        child.material.dispose();
+-                    }
+-                }
+-            }
+-        });
+-        
+-        currentPlacedObject = null;
+-        updatePropertiesMenu(null);
+-        updateCollisionMeshes();
+-        saveWorld();
+-    }
+-});
+-
+-// --- Object Selection (Mouse Raycaster) ---
+-const mouse = new THREE.Vector2();
+-const selectionRaycaster = new THREE.Raycaster();
+-
+-document.querySelector('canvas').addEventListener('pointerdown', (event) => {
+-    if (transformControls.dragging) return;
+-    
+-    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+-    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+-
+-    selectionRaycaster.setFromCamera(mouse, camera);
+-
+-    const selectableObjects = [];
+-    scene.traverse((obj) => {
+-        if (obj.userData && obj.userData.isSelectable) {
+-            selectableObjects.push(obj);
+-        }
+-    });
+-
+-    const intersects = selectionRaycaster.intersectObjects(selectableObjects, true);
+-
+-    if (intersects.length > 0) {
+-        let object = intersects[0].object;
+-        while (object.parent && object.parent !== scene && !object.userData.isSelectable && object !== currentPlacedObject) {
+-            object = object.parent;
+-        }
+-        
+-        currentPlacedObject = object;
+-        transformControls.attach(currentPlacedObject);
+-        updatePropertiesMenu(currentPlacedObject);
+-    } else if (!isMapEditMode) {
+-        // Deselect if clicking empty space, BUT only if not in map edit mode
+-        transformControls.detach();
+-        currentPlacedObject = null;
+-        updatePropertiesMenu(null);
+-    }
+-});
+-// Don't select objects when in map edit mode
+-document.querySelector('canvas').addEventListener('pointerdown', () => {
+-    if (isMapEditMode) return; // handled by the listener above but guard just in case
+-}, { capture: true });
+-
+-// HUD Buttons
+-document.getElementById('btn-emotes-toggle').addEventListener('click', () => {
+-    document.getElementById('circular-menu').classList.toggle('hidden');
+-});
+-document.getElementById('btn-dance1').addEventListener('click', () => {
+-    isDancing = 'Dance Body Roll';
+-    document.getElementById('circular-menu').classList.add('hidden');
+-});
+-document.getElementById('btn-dance2').addEventListener('click', () => {
+-    isDancing = 'Dance Charleston';
+-    document.getElementById('circular-menu').classList.add('hidden');
+-});
+-
+-document.getElementById('btn-set-respawn').addEventListener('click', (e) => {
+-    e.stopPropagation();
+-    const spawnKey = getMapSpawnKey(activeMapName);
+-    let pos;
+-    if (isGhostMode) {
+-        // If flying (ghost or edit), use camera position but adjust to be on floor
+-        pos = camera.position.clone();
+-        pos.y -= 1.5; // Offset to account for eye level
+-    } else {
+-        pos = avatarGroup.position.clone();
+-    }
+-    
+-    localStorage.setItem(spawnKey, JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
+-    localStorage.setItem('spawnPoint', JSON.stringify({ x: pos.x, y: pos.y, z: pos.z }));
+-    
+-    showToast("Point de spawn défini !");
+-    if (isMapEditMode) exitMapEditMode();
+-});
+-
+-document.getElementById('btn-respawn').addEventListener('click', (e) => {
+-    e.stopPropagation();
+-    console.log("Respawn Clicked");
+-    const spawnKey = getMapSpawnKey(activeMapName);
+-    const savedSpawn = localStorage.getItem(spawnKey) || localStorage.getItem('spawnPoint');
+-    if (savedSpawn) {
+-        const spawnPos = JSON.parse(savedSpawn);
+-        // Add safety Y offset to prevent falling under map
+-        avatarGroup.position.set(spawnPos.x, spawnPos.y + 1.0, spawnPos.z);
+-        showToast("Retour au point de spawn");
+-    } else {
+-        avatarGroup.position.set(0, 0, 0);
+-        showToast("Aucun point de spawn défini");
+-    }
+-    verticalVelocity = 0;
+-});
+-
+-document.getElementById('btn-ghost').addEventListener('click', (e) => {
+-    isGhostMode = !isGhostMode;
+-    e.target.classList.toggle('active', isGhostMode);
+-    
+-    if (isGhostMode) {
+-        if (avatar) avatar.visible = false;
+-        controls.enablePan = true;
+-    } else {
+-        if (avatar) avatar.visible = true;
+-        controls.enablePan = false;
+-        // Teleport camera back to avatar
+-        let offset = new THREE.Vector3(0, 2, 5).applyAxisAngle(new THREE.Vector3(0,1,0), avatarGroup.rotation.y + Math.PI);
+-        camera.position.copy(avatarGroup.position).add(offset);
+-        controls.target.copy(avatarGroup.position);
+-        controls.target.y += currentHeadHeight;
+-    }
+-    syncMobileControls();
+-});
+-
+-// Function to spawn a mesh in front of the camera
+-function spawnObject(mesh, type, fileName = null) {
+-    const fwd = new THREE.Vector3();
+-    camera.getWorldDirection(fwd);
+-    fwd.y = 0; fwd.normalize();
+-    mesh.position.copy(camera.position).addScaledVector(fwd, 3);
+-    
+-    mesh.userData.isSelectable = true;
+-    mesh.userData.type = type;
+-    mesh.userData.fileName = fileName;
+-    
+-    scene.add(mesh);
+-    
+-    if (currentPlacedObject) {
+-        transformControls.detach();
+-    }
+-    currentPlacedObject = mesh;
+-    transformControls.attach(mesh);
+-    updatePropertiesMenu(mesh);
+-    
+-    updateCollisionMeshes();
+-    document.getElementById('add-glb-modal').classList.add('hidden');
+-    saveWorld();
+-}
+-
+-document.getElementById('btn-add-glb').addEventListener('click', () => {
+-    document.getElementById('add-glb-modal').classList.remove('hidden');
+-});
+-
+-document.getElementById('btn-close-modal').addEventListener('click', () => {
+-    document.getElementById('add-glb-modal').classList.add('hidden');
+-});
+-
+-document.getElementById('btn-hud-toggle').addEventListener('click', () => {
+-    const wrapper = document.getElementById('hud-wrapper');
+-    const btn = document.getElementById('btn-hud-toggle');
+-    wrapper.classList.toggle('minimized');
+-    btn.classList.toggle('minimized');
+-    btn.textContent = wrapper.classList.contains('minimized') ? '▲' : '▼';
+-});
+-
+-document.getElementById('btn-add-box').addEventListener('click', () => {
+-    const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xffaa00 }));
+-    spawnObject(mesh, 'box');
+-});
+-
+-document.getElementById('btn-add-sphere').addEventListener('click', () => {
+-    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.5, 32, 16), new THREE.MeshStandardMaterial({ color: 0x00aaff }));
+-    spawnObject(mesh, 'sphere');
+-});
+-
+-document.getElementById('btn-add-cone').addEventListener('click', () => {
+-    const mesh = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1, 32), new THREE.MeshStandardMaterial({ color: 0x00ffaa }));
+-    spawnObject(mesh, 'cone');
+-});
+-
+-// --- Toast Notification ---
+-function showToast(message) {
+-    const toast = document.getElementById('toast-notification');
+-    toast.textContent = message;
+-    toast.classList.remove('hidden');
+-    setTimeout(() => {
+-        toast.classList.add('hidden');
+-    }, 3000);
+-}
+-
+-// --- Drop Zone & File Input ---
+-const dropZone = document.getElementById('drop-zone');
+-const fileInput = document.getElementById('glb-file-input');
+-
+-dropZone.addEventListener('click', () => {
+-    fileInput.click();
+-});
+-
+-fileInput.addEventListener('change', async (e) => {
+-    if (e.target.files.length > 0) {
+-        const file = e.target.files[0];
+-        if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
+-            const arrayBuffer = await file.arrayBuffer();
+-            await saveFileToDB(file.name, arrayBuffer);
+-            updateInventoryUI();
+-            document.getElementById('add-glb-modal').classList.add('hidden');
+-            showToast("Modèle importé !");
+-        }
+-    }
+-});
+-
+-dropZone.addEventListener('dragover', (e) => {
+-    e.preventDefault();
+-    dropZone.classList.add('dragover');
+-});
+-dropZone.addEventListener('dragleave', (e) => {
+-    e.preventDefault();
+-    dropZone.classList.remove('dragover');
+-});
+-dropZone.addEventListener('drop', async (e) => {
+-    e.preventDefault();
+-    dropZone.classList.remove('dragover');
+-    
+-    if (e.dataTransfer.files.length > 0) {
+-        const file = e.dataTransfer.files[0];
+-        if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
+-            const arrayBuffer = await file.arrayBuffer();
+-            await saveFileToDB(file.name, arrayBuffer);
+-            
+-            // Add to inventory
+-            const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+-            if (!inventory.includes(file.name)) {
+-                inventory.push(file.name);
+-                localStorage.setItem('inventory', JSON.stringify(inventory));
+-                updateInventoryUI();
+-            }
+-            
+-            const blob = new Blob([arrayBuffer]);
+-            const url = URL.createObjectURL(blob);
+-            new GLTFLoader().load(url, (gltf) => {
+-                const mesh = gltf.scene;
+-                spawnObject(mesh, 'custom_glb', file.name);
+-                URL.revokeObjectURL(url);
+-            });
+-        } else {
+-            alert("Veuillez déposer un fichier .glb ou .gltf");
+-        }
+-    }
+-});
+-
+-// --- Map Modal & Map Management Event Listeners ---
+-document.getElementById('btn-change-map').addEventListener('click', () => {
+-    updateMapInventoryUI();
+-    document.getElementById('map-modal').classList.remove('hidden');
+-});
+-document.getElementById('btn-close-map-modal').addEventListener('click', () => {
+-    document.getElementById('map-modal').classList.add('hidden');
+-});
+-document.getElementById('btn-exit-map-edit').addEventListener('click', () => {
+-    exitMapEditMode();
+-});
+-
+-const mapDropZone = document.getElementById('map-drop-zone');
+-mapDropZone.addEventListener('dragover', (e) => { e.preventDefault(); mapDropZone.classList.add('dragover'); });
+-mapDropZone.addEventListener('dragleave', (e) => { e.preventDefault(); mapDropZone.classList.remove('dragover'); });
+-mapDropZone.addEventListener('drop', async (e) => {
+-    e.preventDefault();
+-    mapDropZone.classList.remove('dragover');
+-    if (e.dataTransfer.files.length > 0) {
+-        const file = e.dataTransfer.files[0];
+-        if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
+-            const arrayBuffer = await file.arrayBuffer();
+-            await saveFileToDB(file.name, arrayBuffer);
+-            
+-            const inv = getMapInventory();
+-            if (!inv.find(m => m.name === file.name)) {
+-                inv.push({ name: file.name, isBuiltin: false });
+-                saveMapInventory(inv);
+-            }
+-            document.getElementById('map-modal').classList.add('hidden');
+-            switchMap(file.name, false);
+-        } else {
+-            alert('Veuillez déposer un fichier .glb ou .gltf');
+-        }
+-    }
+-});
+-
+-// Initialise IndexedDB puis charge le monde sauvegardé
+-initDB().then(() => {
+-    loadWorld();
+-    updateInventoryUI();
+-    
+-    // Ensure CharlyVerse is in map inventory
+-    const inv = getMapInventory();
+-    if (!inv.find(m => m.name === 'CharlyVerse')) {
+-        inv.unshift({ name: 'CharlyVerse', isBuiltin: true });
+-        saveMapInventory(inv);
+-    }
+-    
+-    // Load the active map
+-    const activeEntry = inv.find(m => m.name === activeMapName) || { name: 'CharlyVerse', isBuiltin: true };
+-    switchMap(activeEntry.name, activeEntry.isBuiltin);
+-});
+-
+-const clock = new THREE.Clock();
+-
+ function animate() {
+     requestAnimationFrame(animate);
+     const delta = clock.getDelta();
+ 
+-    let oldAvatarPos = avatarGroup.position.clone();
++    const oldAvatarPos = avatarGroup.position.clone();
+ 
+     moveAvatar();
+ 
+-    let deltaPos = avatarGroup.position.clone().sub(oldAvatarPos);
++    // Compute delta position without extra allocations
++    const deltaPos = _tmpVec.subVectors(avatarGroup.position, oldAvatarPos);
+ 
+-    // Calculate target head height based on state
++    // Target head height based on current state
+     let targetHeadHeight = 1.5;
+     if (isSliding) targetHeadHeight = 0.5;
+     else if (isCrouching) targetHeadHeight = 1.0;
+ 
+-    // Smoothly transition head height
+-    let heightDiff = targetHeadHeight - currentHeadHeight;
+-    let step = heightDiff * 0.1;
++    // Smooth head height transition
++    const heightDiff = targetHeadHeight - currentHeadHeight;
++    const step = heightDiff * 0.1;
+     currentHeadHeight += step;
+ 
+     if (!isGhostMode) {
+-        // Move the camera by the exact same amount the avatar moved (plus the height adjustment) to keep it locked
++        // Apply avatar movement to camera
+         deltaPos.y += step;
+         camera.position.add(deltaPos);
+-
+-        // Update controls target to follow avatar
+-        controls.target.copy(avatarGroup.position);
+-        controls.target.y += currentHeadHeight;
++        // Update controls target only when avatar actually moved
++        if (avatarMoved) {
++            controls.target.copy(avatarGroup.position);
++            controls.target.y += currentHeadHeight;
++        }
+     } else {
+-        // In ghost mode, the target must stay in front of the camera
++        // Ghost mode – keep target in front of camera (joystick handles rotation)
+         const fwd = new THREE.Vector3();
+         camera.getWorldDirection(fwd);
+         controls.target.copy(camera.position).add(fwd);
+@@ -1454,7 +560,7 @@ function animate() {
+ 
+     controls.update();
+ 
+-    // Zoom logic: 1st vs 3rd person
++    // Zoom logic (first‑person vs third‑person)
+     if (!isGhostMode) {
+         if (controls.getDistance() < 1) {
+             if (avatar) avatar.visible = false;

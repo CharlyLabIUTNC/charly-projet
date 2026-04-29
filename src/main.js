@@ -3,6 +3,13 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
+import Stats from 'three/examples/jsm/libs/stats.module.js';
+import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+
+// Setup BVH for all geometries
+THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
+THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
+THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 let scene, camera, renderer;
 
@@ -63,7 +70,8 @@ function saveWorld() {
                 position: { x: obj.position.x, y: obj.position.y, z: obj.position.z },
                 rotation: { x: obj.rotation.x, y: obj.rotation.y, z: obj.rotation.z },
                 scale: { x: obj.scale.x, y: obj.scale.y, z: obj.scale.z },
-                collision: groupCollisionObjects.includes(obj)
+                collision: obj.userData.collision || false,
+                collisionType: obj.userData.collisionType || 'mesh'
             });
         }
     });
@@ -109,8 +117,6 @@ function loadWorld() {
     });
     objectsToRemove.forEach(obj => {
         scene.remove(obj);
-        const idx = groupCollisionObjects.indexOf(obj);
-        if (idx !== -1) groupCollisionObjects.splice(idx, 1);
     });
 
     const saved = localStorage.getItem(`savedWorld_${activeMapName}`) || localStorage.getItem('savedWorld'); // Fallback for transition
@@ -132,33 +138,36 @@ function loadWorld() {
                     const url = URL.createObjectURL(blob);
                     new GLTFLoader().load(url, (gltf) => {
                         const loadedMesh = gltf.scene;
+                        loadedMesh.traverse(n => { if(n.isMesh) n.geometry.computeBoundsTree(); });
                         loadedMesh.position.set(data.position.x, data.position.y, data.position.z);
                         if (data.rotation) loadedMesh.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
                         if (data.scale) loadedMesh.scale.set(data.scale.x, data.scale.y, data.scale.z);
                         loadedMesh.userData.isSelectable = true;
                         loadedMesh.userData.type = data.type;
-                        loadedMesh.userData.fileName = data.fileName;
-                        scene.add(loadedMesh);
-                        if (data.collision) {
-                            groupCollisionObjects.push(loadedMesh);
+                        loadedMesh.userData.collision = data.collision;
+                        loadedMesh.userData.collisionType = data.collisionType || 'mesh';
+                        if (loadedMesh.userData.collisionType === 'box') {
+                            createBoxProxy(loadedMesh);
                         }
+                        scene.add(loadedMesh);
                         URL.revokeObjectURL(url);
                     });
                 }
             }
             
             if (mesh) {
+                if (mesh.isMesh) mesh.geometry.computeBoundsTree();
                 mesh.position.set(data.position.x, data.position.y, data.position.z);
                 if (data.rotation) mesh.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
                 if (data.scale) mesh.scale.set(data.scale.x, data.scale.y, data.scale.z);
                 mesh.userData.isSelectable = true;
                 mesh.userData.type = data.type;
+                mesh.userData.collision = data.collision;
+                mesh.userData.collisionType = data.collisionType || 'mesh';
                 scene.add(mesh);
-                if (data.collision) {
-                    groupCollisionObjects.push(mesh);
-                }
             }
         });
+        setTimeout(updateCollisionMeshes, 1000); // Wait for async loads
     } catch (e) {
         console.error("Error loading world", e);
     }
@@ -189,11 +198,74 @@ let lastCollisionUpdate = 0;
 
 function updateCollisionMeshes() {
     collisionMeshes = [];
-    scene.traverse((obj) => {
-        if (obj.isMesh && (obj.userData.isMap || obj.userData.collision)) {
-            collisionMeshes.push(obj);
+    scene.traverse(node => {
+        // Only consider meshes
+        if (!node.isMesh) return;
+        
+        // Skip helper objects like TransformControls
+        if (node.parent && (node.parent.isTransformControls || node.parent.type === 'TransformControls')) return;
+
+        let isCollisionable = node.userData.isMap || false;
+        let isProxy = node.userData.isCollisionProxy || false;
+        
+        let p = node;
+        let collisionType = 'mesh';
+        let mainObject = null;
+
+        while(p && p !== scene) {
+            if (p.userData && p.userData.collision) {
+                isCollisionable = true;
+                collisionType = p.userData.collisionType || 'mesh';
+                mainObject = p;
+            }
+            p = p.parent;
+        }
+        
+        if (isCollisionable) {
+            if (node.userData.isMap) {
+                collisionMeshes.push(node);
+            } else if (mainObject) {
+                // If it's a proxy box, always include it
+                if (isProxy) {
+                    collisionMeshes.push(node);
+                } 
+                // If it's the real geometry, only include if type is 'mesh'
+                else if (collisionType === 'mesh') {
+                    collisionMeshes.push(node);
+                }
+            }
         }
     });
+}
+
+function createBoxProxy(object) {
+    // Remove existing proxies
+    const existing = [];
+    object.traverse(n => { if(n.userData.isCollisionProxy) existing.push(n); });
+    existing.forEach(n => n.parent.remove(n));
+
+    // Calculate bounding box of the whole group
+    const box = new THREE.Box3().setFromObject(object);
+    const size = new THREE.Vector3();
+    box.getSize(size);
+    const center = new THREE.Vector3();
+    box.getCenter(center);
+
+    const geo = new THREE.BoxGeometry(size.x, size.y, size.z);
+    const mat = new THREE.MeshBasicMaterial({ 
+        color: 0x00ff00, 
+        wireframe: true, 
+        visible: false // Hidden in game
+    });
+    const proxy = new THREE.Mesh(geo, mat);
+    
+    // Position proxy relative to the object
+    object.worldToLocal(center);
+    proxy.position.copy(center);
+    proxy.userData.isCollisionProxy = true;
+    
+    object.add(proxy);
+    return proxy;
 }
 
 
@@ -270,10 +342,14 @@ function switchMap(mapName, isBuiltin = false) {
     mapLoaded = false;
     activeMapName = mapName;
     localStorage.setItem('activeMap', mapName);
-
     const onLoad = (gltf) => {
         map.add(gltf.scene);
-        gltf.scene.traverse(n => { if(n.isMesh) n.userData.isMap = true; });
+        gltf.scene.traverse(n => { 
+            if(n.isMesh) {
+                n.userData.isMap = true;
+                n.geometry.computeBoundsTree(); // Generate BVH
+            } 
+        });
         if (!scene.children.includes(map)) scene.add(map);
         mapLoaded = true;
         updateCollisionMeshes();
@@ -404,11 +480,27 @@ canvas.addEventListener('pointermove', hideModifiers, { capture: true });
 canvas.addEventListener('pointerup', hideModifiers, { capture: true });
 
 
+// --- Reusable objects for high performance (No GC) ---
+const _flyDir = new THREE.Vector3();
+const _fwd = new THREE.Vector3();
+const _right = new THREE.Vector3();
+const _moveDirection = new THREE.Vector3();
+const _wallRayPos = new THREE.Vector3();
+const _floorRayPos = new THREE.Vector3();
+const _downVector = new THREE.Vector3(0, -1, 0);
+const _oldAvatarPos = new THREE.Vector3();
+const _deltaPos = new THREE.Vector3();
+const _upVec = new THREE.Vector3(0, 1, 0);
+const _nearbyMeshes = []; 
+const _tempVec = new THREE.Vector3();
+
+
 // Physics variables
 let verticalVelocity = 0;
 let gravity = 0.005;
 let isGrounded = false;
 let jumpForce = 0.2;
+
 
 
 // State variables for camera
@@ -634,45 +726,41 @@ btnJump.addEventListener('touchend', () => {
 // keyboard movement function
 function moveAvatar() {
     if (isGhostMode) {
-        // Free fly ghost camera
-        let flySpeed = 0.2;
-        if (keys['ShiftLeft'] || keys['ShiftRight']) flySpeed = 0.5;
+        _flyDir.set(0, 0, 0);
+        camera.getWorldDirection(_fwd);
+        _right.crossVectors(_fwd, _upVec);
 
-        let flyDir = new THREE.Vector3();
-        const fwd = new THREE.Vector3();
-        camera.getWorldDirection(fwd);
-        const right = new THREE.Vector3();
-        right.crossVectors(fwd, camera.up);
-
-        if (keys['KeyW']) flyDir.add(fwd);
-        if (keys['KeyS']) flyDir.sub(fwd);
-        if (keys['KeyA']) flyDir.sub(right);
-        if (keys['KeyD']) flyDir.add(right);
-        if (keys['Space']) flyDir.add(camera.up);
-        if (keys['ControlLeft']) flyDir.sub(camera.up);
+        if (keys['KeyW']) _flyDir.add(_fwd);
+        if (keys['KeyS']) _flyDir.sub(_fwd);
+        if (keys['KeyA']) _flyDir.sub(_right);
+        if (keys['KeyD']) _flyDir.add(_right);
+        if (keys['Space']) _flyDir.add(_upVec);
+        if (keys['ControlLeft']) _flyDir.sub(_upVec);
 
         // Add Joystick input for ghost mode
         if (joystickMoveVector.length() > 0.1) {
-            flyDir.addScaledVector(fwd, joystickMoveVector.y);
-            flyDir.addScaledVector(right, joystickMoveVector.x);
+            _flyDir.addScaledVector(_fwd, joystickMoveVector.y);
+            _flyDir.addScaledVector(_right, joystickMoveVector.x);
         }
         
         const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
         if (isMobile) {
-            // Block manual OrbitControls rotation in Ghost mode on mobile
             controls.enabled = false;
         }
         
         // Look Joystick in Ghost Mode - Uniform control
         if (joystickLookVector.length() > 0.05) {
-            const lookSpeed = 0.03; // Consistent speed
+            const lookSpeed = 0.03; 
             controls.rotateLeft(joystickLookVector.x * lookSpeed);
             controls.rotateUp(-joystickLookVector.y * lookSpeed);
         }
 
-        camera.position.addScaledVector(flyDir, flySpeed);
-        // Force the controls target to follow the camera so we can continue orbiting from the new position
-        controls.target.copy(camera.position).add(fwd);
+        let ghostFlySpeed = 0.2;
+        if (keys['ShiftLeft'] || keys['ShiftRight']) ghostFlySpeed = 0.5;
+
+        camera.position.addScaledVector(_flyDir, ghostFlySpeed);
+        // Force the controls target to follow the camera
+        controls.target.copy(camera.position).add(_fwd);
         return;
     }
 
@@ -704,49 +792,38 @@ function moveAvatar() {
         walkSpeed = 0.14;
     }
 
-    // Calculate move direction relative to camera
-    let moveDirection = new THREE.Vector3(0, 0, 0);
+    camera.getWorldDirection(_fwd);
+    _fwd.y = 0;
+    _fwd.normalize();
+    _right.crossVectors(_fwd, _upVec);
 
-    // Get camera's forward and right vectors
-    const forward = new THREE.Vector3();
-    camera.getWorldDirection(forward);
-    forward.y = 0;
-    forward.normalize();
+    _moveDirection.set(0, 0, 0);
 
-    const right = new THREE.Vector3();
-    right.crossVectors(forward, camera.up);
+    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
 
-    if (keys['KeyW']) moveDirection.add(forward);
-    if (keys['KeyS']) moveDirection.sub(forward);
-    if (keys['KeyA']) moveDirection.sub(right);
-    if (keys['KeyD']) moveDirection.add(right);
-
-    // Add Joystick input
-    if (joystickMoveVector.length() > 0.1) {
-        moveDirection.addScaledVector(forward, joystickMoveVector.y);
-        moveDirection.addScaledVector(right, joystickMoveVector.x);
-        
-        // AUTO-FOLLOW CAMERA: Rotate camera towards movement direction
-        // Only on mobile and when not manually rotating (with a 1s buffer after manual rotation)
-        const now = Date.now();
-        const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-        
-        if (isMobile) {
-            // Block manual OrbitControls rotation while moving on mobile
-            // to avoid the "camera jumping" issue
+    if (!isMobile) {
+        if (keys['KeyW']) _moveDirection.add(_fwd);
+        if (keys['KeyS']) _moveDirection.sub(_fwd);
+        if (keys['KeyA']) _moveDirection.sub(_right);
+        if (keys['KeyD']) _moveDirection.add(_right);
+    } else {
+        if (joystickMoveVector.length() > 0.1) {
+            _moveDirection.addScaledVector(_fwd, joystickMoveVector.y);
+            _moveDirection.addScaledVector(_right, joystickMoveVector.x);
+            
+            const now = Date.now();
             controls.enabled = false;
             
             if (!isUserRotatingCamera && (now - lastManualRotationTime > 1000)) {
                 const rotationFactor = 0.08; 
                 controls.rotateLeft(joystickMoveVector.x * rotationFactor);
             }
+        } else {
+            controls.enabled = true;
         }
-    } else {
-        // Re-enable controls if we stop moving
-        controls.enabled = true;
     }
 
-    moveDirection.normalize();
+    _moveDirection.normalize();
 
     // Calculate rotation offset for strafing (moving left/right)
     let rotationOffset = 0;
@@ -767,35 +844,40 @@ function moveAvatar() {
     // Character rotation logic
     const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     // On desktop, character follows camera. On mobile, character only rotates when moving.
-    if (!isMobileDevice || moveDirection.length() > 0.01) {
-        avatarGroup.rotation.y = Math.atan2(forward.x, forward.z) + Math.PI + rotationOffset;
+    if (!isMobileDevice || _moveDirection.length() > 0.01) {
+        avatarGroup.rotation.y = Math.atan2(_fwd.x, _fwd.z) + Math.PI + rotationOffset;
     }
 
 
     // Wall collision detection
-    if (moveDirection.length() > 0) {
-        // Reuse vectors to avoid GC pressure
-        const wallRayPos = avatarGroup.position.clone().add({x:0, y:0.8, z:0});
-        raycasterWall.set(wallRayPos, moveDirection);
+    if (_moveDirection.length() > 0) {
+        _wallRayPos.copy(avatarGroup.position);
+        _wallRayPos.y += 0.8;
+        raycasterWall.set(_wallRayPos, _moveDirection);
         
-        // Use non-recursive intersection on pre-filtered flat mesh list
-        let wallIntersections = raycasterWall.intersectObjects(collisionMeshes, false);
-
-        // Filter out the avatar itself AND floors from wall collisions
-        wallIntersections = wallIntersections.filter(intersect => {
-            // Ignore mostly horizontal surfaces (floors) so they don't block movement
-            if (intersect.face && intersect.face.normal.y > 0.5) return false;
-
-            let obj = intersect.object;
-            while (obj) {
-                if (obj === avatarGroup) return false;
-                obj = obj.parent;
+        // Fast spatial filter without allocating new arrays
+        _nearbyMeshes.length = 0;
+        for(let i=0; i<collisionMeshes.length; i++) {
+            const m = collisionMeshes[i];
+            if (m.userData.isMap || m.position.distanceToSquared(avatarGroup.position) < 400) {
+                _nearbyMeshes.push(m);
             }
-            return true;
-        });
+        }
 
-        if (wallIntersections.length === 0) {
-            avatarGroup.position.addScaledVector(moveDirection, walkSpeed);
+        let wallIntersections = raycasterWall.intersectObjects(_nearbyMeshes, false);
+        
+        let isBlocked = false;
+        for (let i = 0; i < wallIntersections.length; i++) {
+            const intersect = wallIntersections[i];
+            if (intersect.face && intersect.face.normal.y > 0.5) continue;
+            if (intersect.object === avatar || intersect.object.parent === avatarGroup) continue;
+            
+            isBlocked = true;
+            break;
+        }
+
+        if (!isBlocked) {
+            avatarGroup.position.addScaledVector(_moveDirection, walkSpeed);
             isMoving = true;
             isDancing = null; // Cancel dance on movement
         }
@@ -816,17 +898,34 @@ function moveAvatar() {
 
     avatarGroup.position.y += verticalVelocity;
 
-    // Floor detection with raycast
-    const rayPos = avatarGroup.position.clone().add({x:0, y:1.5, z:0});
-    raycasterAvatar.set(rayPos, new THREE.Vector3(0, -1, 0));
+    // Floor detection
+    _floorRayPos.copy(avatarGroup.position);
+    _floorRayPos.y += 1.5;
+    raycasterAvatar.set(_floorRayPos, _downVector);
+ 
+    // Reuse spatial filter
+    _nearbyMeshes.length = 0;
+    for(let i=0; i<collisionMeshes.length; i++) {
+        const m = collisionMeshes[i];
+        if (m.userData.isMap || m.position.distanceToSquared(avatarGroup.position) < 400) {
+            _nearbyMeshes.push(m);
+        }
+    }
 
-    // Use non-recursive intersection
-    let floorIntersections = raycasterAvatar.intersectObjects(collisionMeshes, false).filter(
-        intersect => intersect.face && intersect.face.normal.y > 0.5
-    );
+    let floorIntersections = raycasterAvatar.intersectObjects(_nearbyMeshes, false);
+    
+    // Pick the first horizontal surface
+    let bestFloorHit = null;
+    for (let i = 0; i < floorIntersections.length; i++) {
+        const hit = floorIntersections[i];
+        if (hit.face && hit.face.normal.y > 0.5) {
+            bestFloorHit = hit;
+            break;
+        }
+    }
 
-    if (floorIntersections.length > 0) {
-        let hitPointY = floorIntersections[0].point.y;
+    if (bestFloorHit) {
+        let hitPointY = bestFloorHit.point.y;
         let diff = hitPointY - avatarGroup.position.y;
         
         // diff is positive if floor is ABOVE avatar's feet (e.g. going up stairs)
@@ -911,7 +1010,7 @@ transformControls.addEventListener('change', () => {
         let pos = currentPlacedObject.position.clone();
         pos.y += 5; // Cast from high up
         snapRaycaster.set(pos, new THREE.Vector3(0, -1, 0));
-        let intersects = snapRaycaster.intersectObjects(groupCollisionObjects, true);
+        let intersects = snapRaycaster.intersectObjects(collisionMeshes, false);
         
         // Ignore the object itself
         intersects = intersects.filter(hit => {
@@ -923,9 +1022,8 @@ transformControls.addEventListener('change', () => {
             return true;
         });
 
-        if (intersects.length > 0) {
-            // Only snap if we are dragging horizontally. If user changes Y in menu, we don't want to override it constantly.
-            // Actually, for simplicity, we'll let it snap if the gizmo is used.
+        if (intersects.length > 0 && currentPlacedObject.userData.collision) {
+            // Only snap if collision is ON
             currentPlacedObject.position.y = Math.max(currentPlacedObject.position.y, intersects[0].point.y);
         }
         updatePropertiesMenu(currentPlacedObject);
@@ -990,13 +1088,18 @@ function updatePropertiesMenu(object) {
     });
 
     const btnCollision = document.getElementById('btn-collision-toggle');
-    if (groupCollisionObjects.includes(object)) {
+    if (object.userData.collision) {
         btnCollision.textContent = 'Collision: ON';
         btnCollision.classList.add('collision-on');
     } else {
         btnCollision.textContent = 'Collision: OFF';
         btnCollision.classList.remove('collision-on');
     }
+    const btnCollisionType = document.getElementById('btn-collision-type');
+    const cType = object.userData.collisionType || 'mesh';
+    btnCollisionType.textContent = `Shape: ${cType.toUpperCase()}`;
+    // Show/hide based on whether it's a map (map always uses mesh)
+    btnCollisionType.style.display = object.userData.isMap ? 'none' : 'block';
 }
 
 ['x', 'y', 'z'].forEach(axis => {
@@ -1080,13 +1183,12 @@ window.addEventListener('keydown', (e) => {
 
 document.getElementById('btn-collision-toggle').addEventListener('click', (e) => {
     if (currentPlacedObject) {
-        const idx = groupCollisionObjects.indexOf(currentPlacedObject);
-        if (idx !== -1) {
-            groupCollisionObjects.splice(idx, 1);
+        if (currentPlacedObject.userData.collision) {
+            currentPlacedObject.userData.collision = false;
             e.target.textContent = 'Collision: OFF';
             e.target.classList.remove('collision-on');
         } else {
-            groupCollisionObjects.push(currentPlacedObject);
+            currentPlacedObject.userData.collision = true;
             e.target.textContent = 'Collision: ON';
             e.target.classList.add('collision-on');
         }
@@ -1095,13 +1197,24 @@ document.getElementById('btn-collision-toggle').addEventListener('click', (e) =>
     }
 });
 
-document.getElementById('btn-delete').addEventListener('click', () => {
+document.getElementById('btn-collision-type').addEventListener('click', (e) => {
     if (currentPlacedObject) {
-        const idx = groupCollisionObjects.indexOf(currentPlacedObject);
-        if (idx !== -1) {
-            groupCollisionObjects.splice(idx, 1);
+        const current = currentPlacedObject.userData.collisionType || 'mesh';
+        const next = current === 'mesh' ? 'box' : 'mesh';
+        currentPlacedObject.userData.collisionType = next;
+        
+        if (next === 'box') {
+            createBoxProxy(currentPlacedObject);
         }
         
+        e.target.textContent = `Shape: ${next.toUpperCase()}`;
+        updateCollisionMeshes();
+        saveWorld();
+    }
+});
+
+document.getElementById('btn-delete').addEventListener('click', () => {
+    if (currentPlacedObject) {
         scene.remove(currentPlacedObject);
         transformControls.detach();
         
@@ -1154,6 +1267,7 @@ document.querySelector('canvas').addEventListener('pointerdown', (event) => {
         
         currentPlacedObject = object;
         transformControls.attach(currentPlacedObject);
+        transformControls.visible = true; // Ensure visibility
         updatePropertiesMenu(currentPlacedObject);
     } else if (!isMapEditMode) {
         // Deselect if clicking empty space, BUT only if not in map edit mode
@@ -1247,12 +1361,15 @@ function spawnObject(mesh, type, fileName = null) {
     mesh.userData.fileName = fileName;
     
     scene.add(mesh);
+    if(mesh.isMesh) mesh.geometry.computeBoundsTree();
+    mesh.traverse(n => { if(n.isMesh) n.geometry.computeBoundsTree(); });
     
     if (currentPlacedObject) {
         transformControls.detach();
     }
     currentPlacedObject = mesh;
     transformControls.attach(mesh);
+    transformControls.visible = true;
     updatePropertiesMenu(mesh);
     
     updateCollisionMeshes();
@@ -1400,7 +1517,6 @@ mapDropZone.addEventListener('drop', async (e) => {
 
 // Initialise IndexedDB puis charge le monde sauvegardé
 initDB().then(() => {
-    loadWorld();
     updateInventoryUI();
     
     // Ensure CharlyVerse is in map inventory
@@ -1415,17 +1531,25 @@ initDB().then(() => {
     switchMap(activeEntry.name, activeEntry.isBuiltin);
 });
 
-const clock = new THREE.Clock();
+const stats = new Stats();
+document.body.appendChild(stats.dom);
+
+// Use a simple timer if Clock/Timer is problematic
+let lastTime = performance.now();
 
 function animate() {
     requestAnimationFrame(animate);
-    const delta = clock.getDelta();
+    stats.begin();
+    
+    const time = performance.now();
+    const delta = Math.min((time - lastTime) / 1000, 0.1); // Cap delta to avoid huge jumps
+    lastTime = time;
 
-    let oldAvatarPos = avatarGroup.position.clone();
+    _oldAvatarPos.copy(avatarGroup.position);
 
     moveAvatar();
 
-    let deltaPos = avatarGroup.position.clone().sub(oldAvatarPos);
+    _deltaPos.copy(avatarGroup.position).sub(_oldAvatarPos);
 
     // Calculate target head height based on state
     let targetHeadHeight = 1.5;
@@ -1438,9 +1562,9 @@ function animate() {
     currentHeadHeight += step;
 
     if (!isGhostMode) {
-        // Move the camera by the exact same amount the avatar moved (plus the height adjustment) to keep it locked
-        deltaPos.y += step;
-        camera.position.add(deltaPos);
+        // Move the camera by the exact same amount the avatar moved
+        _deltaPos.y += step;
+        camera.position.add(_deltaPos);
 
         // Update controls target to follow avatar
         controls.target.copy(avatarGroup.position);
@@ -1462,9 +1586,11 @@ function animate() {
             if (avatar) avatar.visible = true;
         }
     }
-
+    
     renderer.render(scene, camera);
     if (mixer) mixer.update(delta);
+    
+    stats.end();
 }
 animate();
 
