@@ -280,12 +280,19 @@ function switchMap(mapName, isBuiltin = false) {
         }
 
         if (!savedSpawn) {
-            // No spawn point — enter onboarding ghost mode
-            camera.position.set(0, 25, 35);
+            // No spawn point — place at model origin (0,0,0) in ghost mode
+            avatarGroup.position.set(0, 0, 0);
+            camera.position.set(0, 2, 5);
             controls.target.set(0, 0, 0);
-            enterMapEditMode();
+            
+            isGhostMode = true;
+            if (avatar) avatar.visible = false;
+            document.getElementById('btn-ghost').classList.add('active');
+            syncMobileControls();
+
             document.getElementById('map-edit-toast-msg').innerHTML =
-                '🗺️ Placez votre map, puis cliquez sur <strong>Set Respawn</strong> pour définir le point d\'apparition.';
+                '🗺️ Bienvenue ! Placez votre map ou déplacez-vous, puis cliquez sur <strong>Set Respawn</strong> pour définir votre point d\'apparition.';
+            document.getElementById('map-edit-toast').classList.remove('hidden');
         } else {
             const spawnPos = JSON.parse(savedSpawn);
             avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
