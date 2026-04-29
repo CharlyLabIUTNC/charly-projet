@@ -433,6 +433,19 @@ function updateMapInventoryUI() {
         btns.appendChild(editBtn);
 
         row.appendChild(btns);
+        
+        // Mobile UX: Make the entire row clickable to load the map
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', (e) => {
+            // Only trigger if we didn't click another button inside
+            if (e.target.tagName !== 'BUTTON') {
+                if (entry.name !== activeMapName) {
+                    document.getElementById('map-modal').classList.add('hidden');
+                    switchMap(entry.name, entry.isBuiltin);
+                }
+            }
+        });
+
         container.appendChild(row);
     });
 }
@@ -1436,6 +1449,27 @@ fileInput.addEventListener('change', async (e) => {
     }
 });
 
+// --- GLB File Input Logic (Click support) ---
+const glbFileInput = document.getElementById('glb-file-input');
+dropZone.addEventListener('click', () => glbFileInput.click());
+
+glbFileInput.addEventListener('change', async (e) => {
+    if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
+            const arrayBuffer = await file.arrayBuffer();
+            await saveFileToDB(file.name, arrayBuffer);
+            
+            const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+            if (!inventory.includes(file.name)) {
+                inventory.push(file.name);
+                localStorage.setItem('inventory', JSON.stringify(inventory));
+                updateInventoryUI();
+            }
+        }
+    }
+});
+
 dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();
     dropZone.classList.add('dragover');
@@ -1487,7 +1521,28 @@ document.getElementById('btn-exit-map-edit').addEventListener('click', () => {
     exitMapEditMode();
 });
 
+// --- Map File Input Logic (Click support) ---
 const mapDropZone = document.getElementById('map-drop-zone');
+const mapFileInput = document.getElementById('map-file-input');
+mapDropZone.addEventListener('click', () => mapFileInput.click());
+
+mapFileInput.addEventListener('change', async (e) => {
+    if (e.target.files.length > 0) {
+        const file = e.target.files[0];
+        if (file.name.toLowerCase().endsWith('.glb') || file.name.toLowerCase().endsWith('.gltf')) {
+            const arrayBuffer = await file.arrayBuffer();
+            await saveFileToDB(file.name, arrayBuffer);
+            
+            const inv = getMapInventory();
+            if (!inv.find(m => m.name === file.name)) {
+                inv.push({ name: file.name, isBuiltin: false });
+                saveMapInventory(inv);
+                updateMapInventoryUI();
+            }
+        }
+    }
+});
+
 mapDropZone.addEventListener('dragover', (e) => { e.preventDefault(); mapDropZone.classList.add('dragover'); });
 mapDropZone.addEventListener('dragleave', (e) => { e.preventDefault(); mapDropZone.classList.remove('dragover'); });
 mapDropZone.addEventListener('drop', async (e) => {
