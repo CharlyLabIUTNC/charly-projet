@@ -14,15 +14,6 @@ import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
 THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
- 
-// Fix for WebXR Emulator / Polyfill: hide XRWebGLBinding to avoid type errors
-// only if we are NOT on a real headset (Meta Quest, etc.)
-if (typeof window !== 'undefined' && window.XRWebGLBinding && !/OculusBrowser|PicoBrowser/i.test(navigator.userAgent)) {
-    try {
-        console.log("WebXR Emulator/Polyfill detected or suspected, applying XRWebGLBinding hack");
-        Object.defineProperty(window, 'XRWebGLBinding', { value: undefined, configurable: true });
-    } catch (e) {}
-}
 
 let scene, camera, renderer;
 let controller1, controller2;
@@ -31,8 +22,6 @@ let vrMoveVector = new THREE.Vector2();
 let vrLookVector = new THREE.Vector2();
 let interactiveGroup;
 let hudMesh, propertiesMesh;
-let lastVRAButton = false;
-let isVRSprinting = false;
 
 scene = new THREE.Scene();
 
@@ -78,6 +67,35 @@ function getFileFromDB(fileName) {
         const request = store.get(fileName);
         request.onsuccess = () => resolve(request.result);
         request.onerror = () => reject(request.error);
+    });
+}
+
+function disposeHierarchy(node) {
+    node.traverse((child) => {
+        if (child.isMesh) {
+            // Nettoyer la géométrie et l'arbre BVH
+            if (child.geometry) {
+                if (child.geometry.boundsTree) child.geometry.disposeBoundsTree();
+                child.geometry.dispose();
+            }
+            // Nettoyer les matériaux et textures
+            if (child.material) {
+                const cleanMaterial = (mat) => {
+                    if (mat.map) mat.map.dispose();
+                    if (mat.normalMap) mat.normalMap.dispose();
+                    if (mat.roughnessMap) mat.roughnessMap.dispose();
+                    if (mat.metalnessMap) mat.metalnessMap.dispose();
+                    if (mat.aoMap) mat.aoMap.dispose();
+                    if (mat.emissiveMap) mat.emissiveMap.dispose();
+                    mat.dispose();
+                };
+                if (Array.isArray(child.material)) {
+                    child.material.forEach(cleanMaterial);
+                } else {
+                    cleanMaterial(child.material);
+                }
+            }
+        }
     });
 }
 
@@ -128,7 +146,7 @@ function updateInventoryUI() {
     });
 }
 
-function loadWorld() {
+async function loadWorld() {
     // Clear existing selectable objects
     const objectsToRemove = [];
     scene.traverse((obj) => {
@@ -137,6 +155,7 @@ function loadWorld() {
         }
     });
     objectsToRemove.forEach(obj => {
+        disposeHierarchy(obj);
         scene.remove(obj);
     });
 
@@ -144,7 +163,11 @@ function loadWorld() {
     if (!saved) return;
     try {
         const worldData = JSON.parse(saved);
-        worldData.forEach(async (data) => {
+        
+        // Helper to promisify GLTFLoader
+        const loadGLTFAsync = (url) => new Promise(resolve => new GLTFLoader().load(url, resolve));
+
+        for (const data of worldData) {
             let mesh = null;
             if (data.type === 'box') {
                 mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), new THREE.MeshStandardMaterial({ color: 0xffaa00 }));
@@ -157,27 +180,41 @@ function loadWorld() {
                 if (arrayBuffer) {
                     const blob = new Blob([arrayBuffer]);
                     const url = URL.createObjectURL(blob);
-                    new GLTFLoader().load(url, (gltf) => {
+                    
+                    try {
+                        const gltf = await loadGLTFAsync(url);
                         const loadedMesh = gltf.scene;
-                        loadedMesh.traverse(n => { if(n.isMesh) n.geometry.computeBoundsTree(); });
+                        
+                        // BVH calculation
+                        loadedMesh.traverse(n => { 
+                            if(n.isMesh && !n.geometry.boundsTree) n.geometry.computeBoundsTree(); 
+                        });
+                        
                         loadedMesh.position.set(data.position.x, data.position.y, data.position.z);
                         if (data.rotation) loadedMesh.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
                         if (data.scale) loadedMesh.scale.set(data.scale.x, data.scale.y, data.scale.z);
+                        
                         loadedMesh.userData.isSelectable = true;
                         loadedMesh.userData.type = data.type;
+                        loadedMesh.userData.fileName = data.fileName;
                         loadedMesh.userData.collision = data.collision;
                         loadedMesh.userData.collisionType = data.collisionType || 'mesh';
+                        
                         if (loadedMesh.userData.collisionType === 'box') {
                             createBoxProxy(loadedMesh);
                         }
+                        
                         scene.add(loadedMesh);
+                    } catch (err) {
+                        console.error("Error loading GLB:", data.fileName, err);
+                    } finally {
                         URL.revokeObjectURL(url);
-                    });
+                    }
                 }
             }
             
             if (mesh) {
-                if (mesh.isMesh) mesh.geometry.computeBoundsTree();
+                if (mesh.isMesh && !mesh.geometry.boundsTree) mesh.geometry.computeBoundsTree();
                 mesh.position.set(data.position.x, data.position.y, data.position.z);
                 if (data.rotation) mesh.rotation.set(data.rotation.x, data.rotation.y, data.rotation.z);
                 if (data.scale) mesh.scale.set(data.scale.x, data.scale.y, data.scale.z);
@@ -187,8 +224,9 @@ function loadWorld() {
                 mesh.userData.collisionType = data.collisionType || 'mesh';
                 scene.add(mesh);
             }
-        });
-        setTimeout(updateCollisionMeshes, 1000); // Wait for async loads
+        }
+        
+        updateCollisionMeshes();
     } catch (e) {
         console.error("Error loading world", e);
     }
@@ -263,7 +301,10 @@ function createBoxProxy(object) {
     // Remove existing proxies
     const existing = [];
     object.traverse(n => { if(n.userData.isCollisionProxy) existing.push(n); });
-    existing.forEach(n => n.parent.remove(n));
+    existing.forEach(n => {
+        disposeHierarchy(n);
+        n.parent.remove(n);
+    });
 
     // Calculate bounding box of the whole group
     const box = new THREE.Box3().setFromObject(object);
@@ -356,7 +397,11 @@ function exitMapEditMode() {
 
 function switchMap(mapName, isBuiltin = false) {
     // Clear current map
-    while (map.children.length > 0) map.remove(map.children[0]);
+    while (map.children.length > 0) {
+        const child = map.children[0];
+        disposeHierarchy(child);
+        map.remove(child);
+    }
     map.position.set(0, 0, 0);
     map.rotation.set(0, 0, 0);
     map.scale.set(1, 1, 1);
@@ -760,7 +805,6 @@ btnJump.addEventListener('touchend', () => {
 // keyboard movement function
 function moveAvatar() {
     const isMobileDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-    const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (isGhostMode) {
         _flyDir.set(0, 0, 0);
         camera.getWorldDirection(_fwd);
@@ -779,7 +823,7 @@ function moveAvatar() {
             _flyDir.addScaledVector(_right, joystickMoveVector.x);
         }
         
-        if (isMobile) {
+        if (isMobileDevice) {
             controls.enabled = false;
         }
         
@@ -810,7 +854,7 @@ function moveAvatar() {
     // Auto-sprint on mobile if joystick is pushed far
     const isJoystickSprinting = joystickMoveVector.length() > 0.8;
 
-    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting || isVRSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1 || (renderer.xr.isPresenting && vrMoveVector.length() > 0.1))) {
+    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1)) {
         isSprinting = true;
     }
 
@@ -929,17 +973,11 @@ function moveAvatar() {
         }
     }
 
-function jump() {
-    if (isGrounded) {
+    // Jump logic
+    if ((keys['Space'] || isMobileJumping) && isGrounded) {
         verticalVelocity = jumpForce;
         isGrounded = false;
     }
-}
-
-// Jump logic
-if (keys['Space'] || isMobileJumping) {
-    jump();
-}
 
     // Apply gravity
     if (!isGrounded) {
@@ -1025,6 +1063,13 @@ if (keys['Space'] || isMobileJumping) {
 
 const glCanvas = document.getElementById('app');
 if (!glCanvas) console.error("Canvas #app not found!");
+
+// Fix for WebXR Emulator / Polyfill: hide XRWebGLBinding to avoid type errors
+// during session initialization when a polyfilled XRSession is used.
+if (window.XRWebGLBinding) {
+    window._XRWebGLBinding = window.XRWebGLBinding; // backup
+    window.XRWebGLBinding = undefined;
+}
 
 renderer = new THREE.WebGLRenderer({
     canvas: glCanvas,
@@ -1436,22 +1481,9 @@ document.getElementById('btn-collision-type').addEventListener('click', (e) => {
 
 document.getElementById('btn-delete').addEventListener('click', () => {
     if (currentPlacedObject) {
-        scene.remove(currentPlacedObject);
         transformControls.detach();
-        
-        currentPlacedObject.traverse((child) => {
-            if (child.isMesh) {
-                if (child.geometry) child.geometry.dispose();
-                if (child.material) {
-                    if (Array.isArray(child.material)) {
-                        child.material.forEach(m => m.dispose());
-                    } else {
-                        child.material.dispose();
-                    }
-                }
-            }
-        });
-        
+        disposeHierarchy(currentPlacedObject);
+        scene.remove(currentPlacedObject);
         currentPlacedObject = null;
         updatePropertiesMenu(null);
         updateCollisionMeshes();
@@ -1582,8 +1614,9 @@ function spawnObject(mesh, type, fileName = null) {
     mesh.userData.fileName = fileName;
     
     scene.add(mesh);
-    if(mesh.isMesh) mesh.geometry.computeBoundsTree();
-    mesh.traverse(n => { if(n.isMesh) n.geometry.computeBoundsTree(); });
+    mesh.traverse(n => { 
+        if(n.isMesh && !n.geometry.boundsTree) n.geometry.computeBoundsTree(); 
+    });
     
     if (currentPlacedObject) {
         transformControls.detach();
@@ -1780,9 +1813,7 @@ mapDropZone.addEventListener('drop', async (e) => {
 });
 
 // Initialise IndexedDB puis charge le monde sauvegardé
-console.log("Starting initialization...");
 initDB().then(() => {
-    console.log("IndexedDB initialized");
     updateInventoryUI();
     
     // Ensure CharlyVerse is in map inventory
@@ -1794,10 +1825,7 @@ initDB().then(() => {
     
     // Load the active map
     const activeEntry = inv.find(m => m.name === activeMapName) || { name: 'CharlyVerse', isBuiltin: true };
-    console.log(`Loading map: ${activeEntry.name}`);
     switchMap(activeEntry.name, activeEntry.isBuiltin);
-}).catch(err => {
-    console.error("Initialization failed:", err);
 });
 
 const stats = new Stats();
@@ -1815,21 +1843,11 @@ function updateVRInput() {
         for (const source of session.inputSources) {
             if (source.gamepad) {
                 const axes = source.gamepad.axes;
-                const buttons = source.gamepad.buttons;
-                
                 // WebXR standard gamepad mapping: axes[2] is horizontal, axes[3] is vertical
                 if (source.handedness === 'left') {
                     vrMoveVector.set(axes[2], -axes[3]);
-                    isVRSprinting = buttons[1].pressed; // Grip to sprint
                 } else if (source.handedness === 'right') {
                     vrLookVector.set(axes[2], -axes[3]);
-                    
-                    // Button A (usually buttons[4] on Oculus/Meta)
-                    const aPressed = buttons[4] ? buttons[4].pressed : false;
-                    if (aPressed && !lastVRAButton) {
-                        jump();
-                    }
-                    lastVRAButton = aPressed;
                 }
             }
         }
@@ -1881,7 +1899,7 @@ function animate() {
     }
 
     // Zoom logic: 1st vs 3rd person
-    if (!isGhostMode) {
+    if (!isGhostMode && !renderer.xr.isPresenting) {
         if (controls.getDistance() < 1) {
             if (avatar) avatar.visible = false;
         } else {
@@ -1898,7 +1916,6 @@ renderer.setAnimationLoop(animate);
 
 //resize canvas
 window.addEventListener('resize', () => {
-    if (renderer.xr.isPresenting) return;
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();

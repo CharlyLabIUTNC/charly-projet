@@ -509,6 +509,7 @@ p {
   max-width: 200px;
   display: flex;
   align-items: center;
+  flex-direction: column;
   gap: 10px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4);
   white-space: normal;
