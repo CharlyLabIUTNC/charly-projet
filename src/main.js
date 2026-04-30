@@ -146,6 +146,9 @@ function updateInventoryUI() {
     });
 }
 
+// Global loaders for reuse
+const gltfLoader = new GLTFLoader();
+
 async function loadWorld() {
     // Clear existing selectable objects
     const objectsToRemove = [];
@@ -165,7 +168,7 @@ async function loadWorld() {
         const worldData = JSON.parse(saved);
         
         // Helper to promisify GLTFLoader
-        const loadGLTFAsync = (url) => new Promise(resolve => new GLTFLoader().load(url, resolve));
+        const loadGLTFAsync = (url) => new Promise((resolve, reject) => gltfLoader.load(url, resolve, undefined, reject));
 
         for (const data of worldData) {
             let mesh = null;
@@ -395,6 +398,15 @@ function exitMapEditMode() {
     syncMobileControls();
 }
 
+function teleportTo(x, y, z) {
+    avatarGroup.position.set(x, y, z);
+    controls.target.set(x, y + currentHeadHeight, z);
+    // Position camera behind and above the target
+    camera.position.set(x, y + 2, z + 5);
+    controls.update();
+    verticalVelocity = 0;
+}
+
 function switchMap(mapName, isBuiltin = false) {
     // Clear current map
     while (map.children.length > 0) {
@@ -422,7 +434,7 @@ function switchMap(mapName, isBuiltin = false) {
 
         applyMapTransform(mapName);
 
-        // Check spawn point (with backward compat for old 'spawnPoint' key)
+        // Check spawn point
         const spawnKey = getMapSpawnKey(mapName);
         let savedSpawn = localStorage.getItem(spawnKey);
         if (!savedSpawn && isBuiltin && localStorage.getItem('spawnPoint')) {
@@ -432,18 +444,14 @@ function switchMap(mapName, isBuiltin = false) {
         }
 
         if (!savedSpawn) {
-            // No spawn point — place at model origin (0,0,0) and enter edit mode
-            avatarGroup.position.set(0, 0, 0);
-            camera.position.set(0, 2, 5);
-            controls.target.set(0, 0, 0);
-            
+            // No spawn point — teleport to origin and enter edit mode
+            teleportTo(0, 0, 0);
             enterMapEditMode();
-            
             document.getElementById('map-edit-toast-msg').innerHTML =
                 '🗺️ Bienvenue ! Placez votre map ou déplacez-vous, puis cliquez sur <strong>Set Respawn</strong> pour définir votre point d\'apparition.';
         } else {
             const spawnPos = JSON.parse(savedSpawn);
-            avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
+            teleportTo(spawnPos.x, spawnPos.y, spawnPos.z);
         }
 
         updateMapInventoryUI();
@@ -451,12 +459,12 @@ function switchMap(mapName, isBuiltin = false) {
     };
 
     if (isBuiltin) {
-        new GLTFLoader().load(`/models/terrain/${mapName}.glb`, onLoad);
+        gltfLoader.load(`/models/terrain/${mapName}.glb`, onLoad);
     } else {
         getFileFromDB(mapName).then(arrayBuffer => {
             if (arrayBuffer) {
                 const url = URL.createObjectURL(new Blob([arrayBuffer]));
-                new GLTFLoader().load(url, (gltf) => { onLoad(gltf); URL.revokeObjectURL(url); });
+                gltfLoader.load(url, (gltf) => { onLoad(gltf); URL.revokeObjectURL(url); });
             }
         });
     }
@@ -520,16 +528,7 @@ function updateMapInventoryUI() {
 let avatarGroup = new THREE.Group();
 // will be added to interactiveGroup later
 
-// Load spawn point if it exists
-let savedSpawn = localStorage.getItem('spawnPoint');
-if (savedSpawn) {
-    try {
-        let spawnPos = JSON.parse(savedSpawn);
-        avatarGroup.position.set(spawnPos.x, spawnPos.y, spawnPos.z);
-    } catch (e) {
-        console.error("Invalid spawn point in localStorage", e);
-    }
-}
+// Load initial spawn point handled by switchMap
 
 // OrbitControls setup
 const controls = new OrbitControls(camera, document.querySelector('canvas'));
@@ -1080,7 +1079,13 @@ renderer.xr.enabled = true;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
-document.body.appendChild(VRButton.createButton(renderer));
+if ('xr' in navigator) {
+    navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
+        if (supported) {
+            document.body.appendChild(VRButton.createButton(renderer));
+        }
+    });
+}
 
 // --- VR Controllers ---
 const controllerModelFactory = new XRControllerModelFactory();
@@ -1568,19 +1573,16 @@ document.getElementById('btn-set-respawn').addEventListener('click', (e) => {
 
 document.getElementById('btn-respawn').addEventListener('click', (e) => {
     e.stopPropagation();
-    console.log("Respawn Clicked");
     const spawnKey = getMapSpawnKey(activeMapName);
     const savedSpawn = localStorage.getItem(spawnKey) || localStorage.getItem('spawnPoint');
     if (savedSpawn) {
         const spawnPos = JSON.parse(savedSpawn);
-        // Add safety Y offset to prevent falling under map
-        avatarGroup.position.set(spawnPos.x, spawnPos.y + 1.0, spawnPos.z);
+        teleportTo(spawnPos.x, spawnPos.y, spawnPos.z);
         showToast("Retour au point de spawn");
     } else {
-        avatarGroup.position.set(0, 0, 0);
+        teleportTo(0, 0, 0);
         showToast("Aucun point de spawn défini");
     }
-    verticalVelocity = 0;
 });
 
 document.getElementById('btn-ghost').addEventListener('click', (e) => {
