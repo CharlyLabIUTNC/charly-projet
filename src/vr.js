@@ -176,17 +176,18 @@ export function initVR(deps) {
         };
     }
 
-    hudMenu = createVRMenu('hud', 0.25);
-    propertiesMenu = createVRMenu('properties-menu', 0.3);
-    addGlbMenu = createVRMenu('add-glb-modal', 0.25);
-    mapModalMenu = createVRMenu('map-modal', 0.25);
+    hudMenu = createVRMenu('hud', 0.5);
+    propertiesMenu = createVRMenu('properties-menu', 0.6);
+    addGlbMenu = createVRMenu('add-glb-modal', 0.5);
+    mapModalMenu = createVRMenu('map-modal', 0.5);
 
-    // Position offsets for menus relative to the left controller
+    // Position offsets for menus
+    // targetFn returns the current controller reference for the menu
     const offsets = {
-        hud: { pos: new THREE.Vector3(-0.25, 0.05, -0.15), rotX: -Math.PI / 4 },
-        prop: { pos: new THREE.Vector3(-0.25, 0.05, -0.15), rotX: -Math.PI / 4 },
-        glb: { pos: new THREE.Vector3(-0.25, 0.15, -0.2), rotX: -Math.PI / 6 },
-        map: { pos: new THREE.Vector3(-0.25, 0.15, -0.2), rotX: -Math.PI / 6 }
+        hud: { pos: new THREE.Vector3(-0.25, 0.05, -0.15), rotX: -Math.PI / 4, targetFn: () => leftController },
+        prop: { pos: new THREE.Vector3(-0.1, 0.05, -0.15), rotX: -Math.PI / 4, targetFn: () => rightController },
+        glb: { pos: new THREE.Vector3(-0.1, 0.15, -0.2), rotX: -Math.PI / 6, targetFn: () => rightController },
+        map: { pos: new THREE.Vector3(-0.1, 0.15, -0.2), rotX: -Math.PI / 6, targetFn: () => rightController }
     };
 
     function syncUIMesh(mesh, offsetInfo) {
@@ -198,7 +199,7 @@ export function initVR(deps) {
             const s = mesh.userData.baseScale;
             mesh.matrix.scale(new THREE.Vector3(s, s, s));
         }
-        mesh.matrix.premultiply(leftController.matrixWorld);
+        mesh.matrix.premultiply(offsetInfo.targetFn().matrixWorld);
         mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
     }
 
@@ -211,6 +212,7 @@ export function initVR(deps) {
         const selectableObjects = [];
         scene.traverse((obj) => {
             if (obj.userData && obj.userData.isSelectable) selectableObjects.push(obj);
+            if (obj instanceof HTMLMesh) selectableObjects.push(obj);
         });
         return vrRaycaster.intersectObjects(selectableObjects, true);
     }
@@ -223,7 +225,20 @@ export function initVR(deps) {
             let intersection = intersections[0];
             let object = intersection.object;
             
-            if (object instanceof HTMLMesh) return;
+            // To safely open the file picker natively in WebXR, we must intercept the XR select event
+            if (object instanceof HTMLMesh) {
+                const domId = object.userData.domElement ? object.userData.domElement.id : '';
+                if (domId === 'add-glb-modal') {
+                    if (intersection.uv.y > 0.3 && intersection.uv.y < 0.65) {
+                        document.getElementById('glb-file-input').click();
+                    }
+                } else if (domId === 'map-modal') {
+                    if (intersection.uv.y > 0.6 && intersection.uv.y < 0.9) {
+                        document.getElementById('map-file-input').click();
+                    }
+                }
+                return;
+            }
 
             while (object.parent && object.parent !== scene && !object.userData.isSelectable) {
                 object = object.parent;
@@ -393,7 +408,15 @@ export function initVR(deps) {
                             lastXButtonPressed = isXPressed;
                         }
                     } else if (source.handedness === 'right') {
-                        deps.vrState.vrLookVector.set(axes[2] || 0, -(axes[3] || 0));
+                        if (vrGrabbedObject) {
+                            // Right stick Y axis (axes[3]) pushes/pulls the grabbed object
+                            // Negative axes[3] = push away = more negative local Z
+                            // Positive axes[3] = pull close = less negative local Z
+                            vrGrabbedObject.position.z += (axes[3] || 0) * 0.05;
+                            if (vrGrabbedObject.position.z > -0.1) vrGrabbedObject.position.z = -0.1; // Limit closeness
+                        } else {
+                            deps.vrState.vrLookVector.set(axes[2] || 0, -(axes[3] || 0));
+                        }
                         // A button (usually button 4 or 5. We check both just in case, or stick to 4)
                         if (source.gamepad.buttons[4] && source.gamepad.buttons[4].pressed) isJumping = true;
                         if (source.gamepad.buttons[5] && source.gamepad.buttons[5].pressed) isJumping = true;
