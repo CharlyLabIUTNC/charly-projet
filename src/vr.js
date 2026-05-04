@@ -4,8 +4,12 @@ import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerM
 import { InteractiveGroup } from 'three/examples/jsm/interactive/InteractiveGroup.js';
 import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 
-let vrGrabbedObject = null;
-const vrRaycaster = new THREE.Raycaster();
+    let vrGrabbedObject = null;
+    let grabbedByController = null;
+    let twoHandScaleActive = false;
+    let initialPinchDistance = 0;
+    let initialObjectScale = new THREE.Vector3();
+    const vrRaycaster = new THREE.Raycaster();
 
 export function initVR(deps) {
     const { 
@@ -37,15 +41,30 @@ export function initVR(deps) {
     const controllerModelFactory = new XRControllerModelFactory();
 
     const controller1 = renderer.xr.getController(0);
+    const controller2 = renderer.xr.getController(1);
+
+    let leftController = controller1;
+    let rightController = controller2;
+
+    const controller1Connected = (e) => {
+        controller1.userData.source = e.data;
+        if (e.data.handedness === 'left') leftController = controller1;
+        if (e.data.handedness === 'right') rightController = controller1;
+    };
+    const controller2Connected = (e) => {
+        controller2.userData.source = e.data;
+        if (e.data.handedness === 'left') leftController = controller2;
+        if (e.data.handedness === 'right') rightController = controller2;
+    };
+
     controller1.addEventListener('selectstart', onSelectStart);
     controller1.addEventListener('selectend', onSelectEnd);
-    controller1.addEventListener('connected', (e) => controller1.userData.source = e.data);
+    controller1.addEventListener('connected', controller1Connected);
     scene.add(controller1);
 
-    const controller2 = renderer.xr.getController(1);
     controller2.addEventListener('selectstart', onSelectStart);
     controller2.addEventListener('selectend', onSelectEnd);
-    controller2.addEventListener('connected', (e) => controller2.userData.source = e.data);
+    controller2.addEventListener('connected', controller2Connected);
     scene.add(controller2);
 
     const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
@@ -135,6 +154,7 @@ export function initVR(deps) {
                 // Instantiate HTMLMesh only when the menu first becomes visible
                 mesh = new HTMLMesh(contentEl);
                 mesh.scale.setScalar(scale);
+                mesh.userData.baseScale = scale;
                 mesh.userData.domElement = el; // Store the original wrapper for scrolling
                 interactiveGroup.add(mesh);
             }
@@ -174,7 +194,11 @@ export function initVR(deps) {
         mesh.matrix.identity();
         mesh.matrix.makeRotationX(offsetInfo.rotX);
         mesh.matrix.setPosition(offsetInfo.pos);
-        mesh.matrix.premultiply(controller1.matrixWorld);
+        if (mesh.userData.baseScale) {
+            const s = mesh.userData.baseScale;
+            mesh.matrix.scale(new THREE.Vector3(s, s, s));
+        }
+        mesh.matrix.premultiply(leftController.matrixWorld);
         mesh.matrix.decompose(mesh.position, mesh.quaternion, mesh.scale);
     }
 
@@ -207,18 +231,41 @@ export function initVR(deps) {
             
             if (object.userData && object.userData.isSelectable) {
                 setCurrentPlacedObject(object);
-                vrGrabbedObject = object;
-                controller.attach(vrGrabbedObject); // Use attach for free movement in VR
-                updatePropertiesMenu(getCurrentPlacedObject());
-                if (transformControls) transformControls.detach();
+                if (vrGrabbedObject === object) {
+                    // Two handed grab!
+                    twoHandScaleActive = true;
+                    scene.attach(vrGrabbedObject);
+                    initialPinchDistance = controller1.position.distanceTo(controller2.position);
+                    initialObjectScale.copy(vrGrabbedObject.scale);
+                } else {
+                    vrGrabbedObject = object;
+                    grabbedByController = controller;
+                    controller.attach(vrGrabbedObject); // Use attach for free movement in VR
+                    updatePropertiesMenu(getCurrentPlacedObject());
+                    if (transformControls) transformControls.detach();
+                }
             }
         }
     }
 
-    function onSelectEnd() {
-        if (vrGrabbedObject) {
+    function onSelectEnd(event) {
+        const controller = event.target;
+        if (twoHandScaleActive) {
+            twoHandScaleActive = false; // end two hand scale
+            if (vrGrabbedObject) {
+                saveWorld();
+                // reattach to the other controller
+                const otherController = (controller === controller1) ? controller2 : controller1;
+                grabbedByController = otherController;
+                otherController.attach(vrGrabbedObject);
+            }
+            return;
+        }
+
+        if (vrGrabbedObject && grabbedByController === controller) {
             scene.attach(vrGrabbedObject); // Detach and keep world transform
             vrGrabbedObject = null;
+            grabbedByController = null;
             saveWorld();
         }
     }
@@ -252,6 +299,7 @@ export function initVR(deps) {
 
             if (controller.userData.lastHovered !== obj) {
                 controller.userData.lastHovered = obj;
+                if (line) line.material.color.setHex(0x00ff00);
                 const source = controller.userData.source;
                 if (source && source.gamepad && source.gamepad.hapticActuators && source.gamepad.hapticActuators[0]) {
                     source.gamepad.hapticActuators[0].pulse(0.3, 50);
@@ -278,15 +326,27 @@ export function initVR(deps) {
                 }
             }
         } else {
-            if (line) line.scale.z = 5;
+            if (line) {
+                line.scale.z = 5;
+                line.material.color.setHex(0xffffff);
+            }
             controller.userData.lastHovered = null;
         }
     }
 
+    let lastUIUpdateTime = 0;
     function updateVRGrab() {
         if (vrGrabbedObject) {
-            // Object is attached to controller, just update UI
-            updatePropertiesMenu(vrGrabbedObject);
+            if (twoHandScaleActive) {
+                const currentDistance = controller1.position.distanceTo(controller2.position);
+                const scaleFactor = currentDistance / initialPinchDistance;
+                vrGrabbedObject.scale.copy(initialObjectScale).multiplyScalar(scaleFactor);
+            }
+            if (Date.now() - lastUIUpdateTime > 500) {
+                // Object is attached to controller, just update UI rarely to prevent HTMLMesh lag
+                updatePropertiesMenu(vrGrabbedObject);
+                lastUIUpdateTime = Date.now();
+            }
         }
     }
 
