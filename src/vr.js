@@ -14,7 +14,7 @@ import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 export function initVR(deps) {
     const { 
         renderer, scene, camera, avatarGroup, controls, 
-        getCollisionMeshes, saveWorld, updatePropertiesMenu,
+        getCollisionMeshes, updateCollisionMeshes, saveWorld, updatePropertiesMenu,
         getCurrentPlacedObject, setCurrentPlacedObject, transformControls
     } = deps;
 
@@ -86,6 +86,18 @@ export function initVR(deps) {
     let hudMenu, propertiesMenu, addGlbMenu, mapModalMenu;
 
     renderer.xr.addEventListener('sessionstart', () => {
+        const btnEmotes = document.getElementById('btn-emotes-toggle');
+        if(btnEmotes) btnEmotes.style.display = 'none';
+
+        const posGroup = document.getElementById('position-controls-group');
+        if(posGroup) posGroup.style.display = 'none';
+
+        const glbImportSection = document.getElementById('glb-import-section');
+        if (glbImportSection) glbImportSection.style.display = 'none';
+
+        const mapImportSection = document.getElementById('map-import-section');
+        if (mapImportSection) mapImportSection.style.display = 'none';
+
         // Hide avatar to avoid seeing inside mesh
         avatarGroup.children.forEach(child => {
             if (child !== camera && child !== controller1 && child !== controller2 && child !== controllerGrip1 && child !== controllerGrip2) {
@@ -108,6 +120,18 @@ export function initVR(deps) {
     });
 
     renderer.xr.addEventListener('sessionend', () => {
+        const btnEmotes = document.getElementById('btn-emotes-toggle');
+        if(btnEmotes) btnEmotes.style.display = '';
+
+        const posGroup = document.getElementById('position-controls-group');
+        if(posGroup) posGroup.style.display = '';
+
+        const glbImportSection = document.getElementById('glb-import-section');
+        if (glbImportSection) glbImportSection.style.display = '';
+
+        const mapImportSection = document.getElementById('map-import-section');
+        if (mapImportSection) mapImportSection.style.display = '';
+
         avatarGroup.children.forEach(child => {
             if (child.userData.wasVisibleBeforeVR !== undefined) {
                 child.visible = child.userData.wasVisibleBeforeVR;
@@ -227,16 +251,6 @@ export function initVR(deps) {
             
             // To safely open the file picker natively in WebXR, we must intercept the XR select event
             if (object instanceof HTMLMesh) {
-                const domId = object.userData.domElement ? object.userData.domElement.id : '';
-                if (domId === 'add-glb-modal') {
-                    if (intersection.uv.y > 0.3 && intersection.uv.y < 0.65) {
-                        document.getElementById('glb-file-input').click();
-                    }
-                } else if (domId === 'map-modal') {
-                    if (intersection.uv.y > 0.6 && intersection.uv.y < 0.9) {
-                        document.getElementById('map-file-input').click();
-                    }
-                }
                 return;
             }
 
@@ -269,6 +283,7 @@ export function initVR(deps) {
             twoHandScaleActive = false; // end two hand scale
             if (vrGrabbedObject) {
                 saveWorld();
+                updateCollisionMeshes();
                 // reattach to the other controller
                 const otherController = (controller === controller1) ? controller2 : controller1;
                 grabbedByController = otherController;
@@ -279,8 +294,13 @@ export function initVR(deps) {
 
         if (vrGrabbedObject && grabbedByController === controller) {
             scene.attach(vrGrabbedObject); // Detach and keep world transform
+            
+            // Force the object and proxy to update matrices BEFORE generating collision
+            vrGrabbedObject.updateMatrixWorld(true);
+            
             vrGrabbedObject = null;
             grabbedByController = null;
+            updateCollisionMeshes();
             saveWorld();
         }
     }

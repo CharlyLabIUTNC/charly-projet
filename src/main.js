@@ -354,6 +354,8 @@ function createBoxProxy(object) {
         n.parent.remove(n);
     });
 
+    object.updateMatrixWorld(true);
+
     // Calculate bounding box of the whole group
     const box = new THREE.Box3().setFromObject(object);
     const size = new THREE.Vector3();
@@ -429,7 +431,7 @@ function enterMapEditMode() {
 function exitMapEditMode() {
     isMapEditMode = false;
     isGhostMode = false;
-    if (avatar) avatar.visible = true;
+    if (avatar && !renderer.xr.isPresenting) avatar.visible = true;
     controls.enablePan = false;
     document.getElementById('btn-ghost').classList.remove('active');
     transformControls.detach();
@@ -800,12 +802,27 @@ function moveAvatar() {
             controls.rotateUp(-joystickLookVector.y * lookSpeed);
         }
 
-        let ghostFlySpeed = 0.2;
-        if (keys['ShiftLeft'] || keys['ShiftRight']) ghostFlySpeed = 0.5;
+        // Add VR input for ghost mode flying
+        if (vrMoveVector.length() > 0.1) {
+            _flyDir.addScaledVector(_fwd, vrMoveVector.y);
+            _flyDir.addScaledVector(_right, vrMoveVector.x);
+        }
 
-        camera.position.addScaledVector(_flyDir, ghostFlySpeed);
-        // Force the controls target to follow the camera
-        controls.target.copy(camera.position).add(_fwd);
+        let ghostFlySpeed = 0.2;
+        if (keys['ShiftLeft'] || keys['ShiftRight'] || vrState.isVRSprinting) ghostFlySpeed = 0.5;
+
+        if (renderer.xr.isPresenting) {
+            // In VR, move the avatar group to fly, because camera position is locked to headset
+            avatarGroup.position.addScaledVector(_flyDir, ghostFlySpeed);
+            // Right stick turns the player in VR in Ghost mode
+            if (Math.abs(vrLookVector.x) > 0.1) {
+                avatarGroup.rotation.y -= vrLookVector.x * 0.05;
+            }
+        } else {
+            camera.position.addScaledVector(_flyDir, ghostFlySpeed);
+            // Force the controls target to follow the camera
+            controls.target.copy(camera.position).add(_fwd);
+        }
         return;
     }
 
@@ -1058,6 +1075,7 @@ if ('xr' in navigator) {
                 const vrApi = module.initVR({
                     renderer, scene, camera, avatarGroup, controls,
                     getCollisionMeshes: () => collisionMeshes,
+                    updateCollisionMeshes,
                     saveWorld, updatePropertiesMenu,
                     getCurrentPlacedObject: () => currentPlacedObject,
                     setCurrentPlacedObject: (obj) => currentPlacedObject = obj,
@@ -1081,6 +1099,14 @@ scene.add(transformControls.getHelper());
 // Disable OrbitControls while dragging the gizmo
 transformControls.addEventListener('dragging-changed', function (event) {
     controls.enabled = !event.value;
+    if (!event.value) {
+        // Just finished dragging
+        updateCollisionMeshes();
+        saveWorld();
+        if (currentPlacedObject) {
+            updatePropertiesMenu(currentPlacedObject);
+        }
+    }
 });
 
 const snapRaycaster = new THREE.Raycaster();
@@ -1413,7 +1439,7 @@ document.getElementById('btn-ghost').addEventListener('click', (e) => {
         if (avatar) avatar.visible = false;
         controls.enablePan = true;
     } else {
-        if (avatar) avatar.visible = true;
+        if (avatar && !renderer.xr.isPresenting) avatar.visible = true;
         controls.enablePan = false;
         // Teleport camera back to avatar
         let offset = new THREE.Vector3(0, 2, 5).applyAxisAngle(new THREE.Vector3(0,1,0), avatarGroup.rotation.y + Math.PI);
@@ -1429,7 +1455,11 @@ function spawnObject(mesh, type, fileName = null) {
     const fwd = new THREE.Vector3();
     camera.getWorldDirection(fwd);
     fwd.y = 0; fwd.normalize();
-    mesh.position.copy(camera.position).addScaledVector(fwd, 3);
+    
+    // Use getWorldPosition since camera might be child of avatar in VR
+    const camPos = new THREE.Vector3();
+    camera.getWorldPosition(camPos);
+    mesh.position.copy(camPos).addScaledVector(fwd, 1.5);
     
     mesh.userData.isSelectable = true;
     mesh.userData.type = type;
@@ -1441,6 +1471,7 @@ function spawnObject(mesh, type, fileName = null) {
     createBoxProxy(mesh);
     
     scene.add(mesh);
+    mesh.updateMatrixWorld(true);
     mesh.traverse(n => { 
         if(n.isMesh && !n.geometry.boundsTree) n.geometry.computeBoundsTree(); 
     });
