@@ -5,10 +5,6 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
-import { VRButton } from 'three/examples/jsm/webxr/VRButton.js';
-import { XRControllerModelFactory } from 'three/examples/jsm/webxr/XRControllerModelFactory.js';
-import { InteractiveGroup } from 'three/examples/jsm/interactive/InteractiveGroup.js';
-import { HTMLMesh } from 'three/examples/jsm/interactive/HTMLMesh.js';
 
 // Setup BVH for all geometries
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -16,12 +12,6 @@ THREE.BufferGeometry.prototype.disposeBoundsTree = disposeBoundsTree;
 THREE.Mesh.prototype.raycast = acceleratedRaycast;
 
 let scene, camera, renderer;
-let controller1, controller2;
-let controllerGrip1, controllerGrip2;
-let vrMoveVector = new THREE.Vector2();
-let vrLookVector = new THREE.Vector2();
-let interactiveGroup;
-let hudMesh, propertiesMesh;
 
 scene = new THREE.Scene();
 
@@ -66,6 +56,16 @@ function getFileFromDB(fileName) {
         const store = transaction.objectStore(storeName);
         const request = store.get(fileName);
         request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+    });
+}
+
+function deleteFileFromDB(fileName) {
+    return new Promise((resolve, reject) => {
+        const transaction = db.transaction([storeName], 'readwrite');
+        const store = transaction.objectStore(storeName);
+        const request = store.delete(fileName);
+        request.onsuccess = () => resolve();
         request.onerror = () => reject(request.error);
     });
 }
@@ -126,9 +126,16 @@ function updateInventoryUI() {
     }
     container.innerHTML = '';
     inventory.forEach(fileName => {
+        const itemDiv = document.createElement('div');
+        itemDiv.style.display = 'flex';
+        itemDiv.style.alignItems = 'center';
+        itemDiv.style.gap = '5px';
+        itemDiv.style.marginBottom = '5px';
+
         const btn = document.createElement('button');
         btn.className = 'hud-btn';
         btn.textContent = fileName;
+        btn.style.flexGrow = '1';
         btn.onclick = async () => {
             const arrayBuffer = await getFileFromDB(fileName);
             if (arrayBuffer) {
@@ -137,13 +144,51 @@ function updateInventoryUI() {
                 new GLTFLoader().load(url, (gltf) => {
                     spawnObject(gltf.scene, 'custom_glb', fileName);
                     URL.revokeObjectURL(url);
+                }, undefined, (error) => {
+                    console.error("Erreur de chargement GLTF:", error);
+                    URL.revokeObjectURL(url);
+                    if (confirm(`Impossible de charger le modèle 3D "${fileName}". Il semble corrompu. Voulez-vous le supprimer de l'inventaire ?`)) {
+                        removeFileFromInventory(fileName);
+                    }
                 });
             } else {
-                alert("Erreur: fichier introuvable dans la base de données.");
+                if (confirm(`Le fichier "${fileName}" est introuvable dans la base de données. Il n'est plus accessible. Voulez-vous le retirer de votre inventaire ?`)) {
+                    removeFileFromInventory(fileName);
+                }
             }
         };
-        container.appendChild(btn);
+        
+        const deleteBtn = document.createElement('button');
+        deleteBtn.innerHTML = '&#10006;'; // Crois (X)
+        deleteBtn.style.background = '#ff3b30';
+        deleteBtn.style.color = 'white';
+        deleteBtn.style.border = 'none';
+        deleteBtn.style.borderRadius = '50%';
+        deleteBtn.style.width = '24px';
+        deleteBtn.style.height = '24px';
+        deleteBtn.style.cursor = 'pointer';
+        deleteBtn.title = "Supprimer ce modèle";
+        deleteBtn.onclick = () => {
+            if (confirm(`Voulez-vous vraiment supprimer "${fileName}" de votre inventaire ?`)) {
+                removeFileFromInventory(fileName);
+            }
+        };
+
+        itemDiv.appendChild(btn);
+        itemDiv.appendChild(deleteBtn);
+        container.appendChild(itemDiv);
     });
+}
+
+function removeFileFromInventory(fileName) {
+    // Delete from IndexedDB
+    deleteFileFromDB(fileName).catch(e => console.error("Error deleting from DB:", e));
+    // Remove from localStorage array
+    let inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+    inventory = inventory.filter(name => name !== fileName);
+    localStorage.setItem('inventory', JSON.stringify(inventory));
+    // Update UI
+    updateInventoryUI();
 }
 
 // Global loaders for reuse
@@ -671,134 +716,56 @@ document.addEventListener('keyup', (event) => {
     keys[event.code] = false;
 });
 
-// --- Mobile Joystick Logic ---
-const joystickContainer = document.getElementById('joystick-container');
 // --- Mobile Joysticks Logic ---
-let joystickMoveVector = new THREE.Vector2(0, 0);
-let joystickLookVector = new THREE.Vector2(0, 0);
-let isMobileSprinting = false;
-let isMobileCrouching = false;
-let isMobileJumping = false;
+export const mobileState = {
+    joystickMoveVector: new THREE.Vector2(0, 0),
+    joystickLookVector: new THREE.Vector2(0, 0),
+    isMobileSprinting: false,
+    isMobileCrouching: false,
+    isMobileJumping: false
+};
+
+export const vrState = {
+    vrMoveVector: new THREE.Vector2(0, 0),
+    vrLookVector: new THREE.Vector2(0, 0)
+};
+
+// Expose variables for backward compatibility within main.js without renaming everything
+let joystickMoveVector = mobileState.joystickMoveVector;
+let joystickLookVector = mobileState.joystickLookVector;
+let vrMoveVector = vrState.vrMoveVector;
+let vrLookVector = vrState.vrLookVector;
+
+// Create getter properties so the variables sync with the state object
+Object.defineProperty(window, 'isMobileCrouching', { get: () => mobileState.isMobileCrouching, set: (val) => mobileState.isMobileCrouching = val });
+Object.defineProperty(window, 'isMobileJumping', { get: () => mobileState.isMobileJumping, set: (val) => mobileState.isMobileJumping = val });
+Object.defineProperty(window, 'isMobileSprinting', { get: () => mobileState.isMobileSprinting, set: (val) => mobileState.isMobileSprinting = val });
 
 function syncMobileControls() {
     const isMobile = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
     if (!isMobile) return;
-
+    
+    // Fallback sync before the module loads
     const actionButtons = document.getElementById('mobile-actions');
     const lookJoystick = document.getElementById('joystick-look-container');
 
     if (isGhostMode || isMapEditMode) {
-        actionButtons.classList.add('hidden');
-        lookJoystick.classList.remove('hidden');
+        if (actionButtons) actionButtons.classList.add('hidden');
+        if (lookJoystick) lookJoystick.classList.remove('hidden');
     } else {
-        actionButtons.classList.remove('hidden');
-        lookJoystick.classList.add('hidden');
+        if (actionButtons) actionButtons.classList.remove('hidden');
+        if (lookJoystick) lookJoystick.classList.add('hidden');
     }
 }
 
-
-function setupJoystick(baseId, stickId, onUpdate, onEnd) {
-    const base = document.getElementById(baseId);
-    const stick = document.getElementById(stickId);
-    const container = base.parentElement;
-    let activeTouchId = null;
-
-    if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
-        container.classList.remove('hidden');
-    }
-
-    base.addEventListener('touchstart', (e) => {
-        if (activeTouchId !== null) return;
-        const touch = e.changedTouches[0];
-        activeTouchId = touch.identifier;
-        update(touch);
-        e.stopPropagation();
-        if (e.cancelable) e.preventDefault();
-    }, { passive: false });
-
-    window.addEventListener('touchmove', (e) => {
-        if (activeTouchId === null) return;
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            if (e.changedTouches[i].identifier === activeTouchId) {
-                update(e.changedTouches[i]);
-                e.stopPropagation();
-                if (e.cancelable) e.preventDefault();
-                break;
-            }
-        }
-    }, { passive: false });
-
-    const end = (e) => {
-        if (activeTouchId === null) return;
-        for (let i = 0; i < e.changedTouches.length; i++) {
-            if (e.changedTouches[i].identifier === activeTouchId) {
-                activeTouchId = null;
-                stick.style.transform = `translate(0, 0)`;
-                onEnd();
-                break;
-            }
-        }
-    };
-
-    window.addEventListener('touchend', end);
-    window.addEventListener('touchcancel', end);
-
-    function update(touch) {
-        const rect = base.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2;
-        const centerY = rect.top + rect.height / 2;
-        const maxDistance = rect.width / 2;
-
-        let dx = touch.clientX - centerX;
-        let dy = touch.clientY - centerY;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-
-        if (distance > maxDistance) {
-            dx = (dx / distance) * maxDistance;
-            dy = (dy / distance) * maxDistance;
-        }
-
-        stick.style.transform = `translate(${dx}px, ${dy}px)`;
-        onUpdate(dx / maxDistance, -dy / maxDistance);
-    }
+// Dynamically load mobile controls if on mobile device
+if ('ontouchstart' in window || navigator.maxTouchPoints > 0) {
+    import('./mobile.js').then(module => {
+        module.initMobileControls(mobileState, isGhostMode, isMapEditMode);
+        // Override sync function to use the one from module
+        window.syncMobileControls = () => module.syncMobileControls(isGhostMode, isMapEditMode);
+    }).catch(err => console.error("Error loading mobile controls:", err));
 }
-
-setupJoystick('joystick-move-base', 'joystick-move-stick', 
-    (x, y) => joystickMoveVector.set(x, y),
-    () => joystickMoveVector.set(0, 0)
-);
-
-setupJoystick('joystick-look-base', 'joystick-look-stick',
-    (x, y) => joystickLookVector.set(x, y),
-    () => joystickLookVector.set(0, 0)
-);
-
-// Mobile Action Buttons
-const mobileActions = document.getElementById('mobile-actions');
-syncMobileControls();
-
-
-const btnCrouch = document.getElementById('btn-mobile-crouch');
-btnCrouch.addEventListener('touchstart', (e) => {
-    isMobileCrouching = true;
-    btnCrouch.classList.add('active');
-    e.preventDefault();
-}, { passive: false });
-btnCrouch.addEventListener('touchend', () => {
-    isMobileCrouching = false;
-    btnCrouch.classList.remove('active');
-});
-
-const btnJump = document.getElementById('btn-mobile-jump');
-btnJump.addEventListener('touchstart', (e) => {
-    isMobileJumping = true;
-    btnJump.classList.add('active');
-    e.preventDefault();
-}, { passive: false });
-btnJump.addEventListener('touchend', () => {
-    isMobileJumping = false;
-    btnJump.classList.remove('active');
-});
 
 
 // keyboard movement function
@@ -852,8 +819,9 @@ function moveAvatar() {
 
     // Auto-sprint on mobile if joystick is pushed far
     const isJoystickSprinting = joystickMoveVector.length() > 0.8;
+    const isVRSprintActive = vrState.isVRSprinting && vrMoveVector.length() > 0.1;
 
-    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting) && (keys['KeyW'] || joystickMoveVector.length() > 0.1)) {
+    if ((keys['ShiftLeft'] || keys['ShiftRight'] || isJoystickSprinting || isVRSprintActive) && (keys['KeyW'] || joystickMoveVector.length() > 0.1 || vrMoveVector.length() > 0.1)) {
         isSprinting = true;
     }
 
@@ -973,7 +941,7 @@ function moveAvatar() {
     }
 
     // Jump logic
-    if ((keys['Space'] || isMobileJumping) && isGrounded) {
+    if ((keys['Space'] || isMobileJumping || vrState.isVRJumping) && isGrounded) {
         verticalVelocity = jumpForce;
         isGrounded = false;
     }
@@ -1079,173 +1047,29 @@ renderer.xr.enabled = true;
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.setPixelRatio(window.devicePixelRatio);
 
+let updateVRGrab = () => {};
+let updateVRInput = () => {};
+let onVRPropertiesMenuUpdated = () => {};
+
 if ('xr' in navigator) {
     navigator.xr.isSessionSupported('immersive-vr').then((supported) => {
         if (supported) {
-            document.body.appendChild(VRButton.createButton(renderer));
+            import('./vr.js').then(module => {
+                const vrApi = module.initVR({
+                    renderer, scene, camera, avatarGroup, controls,
+                    getCollisionMeshes: () => collisionMeshes,
+                    saveWorld, updatePropertiesMenu,
+                    getCurrentPlacedObject: () => currentPlacedObject,
+                    setCurrentPlacedObject: (obj) => currentPlacedObject = obj,
+                    transformControls,
+                    vrState
+                });
+                updateVRGrab = vrApi.updateVRGrab;
+                updateVRInput = vrApi.updateVRInput;
+                onVRPropertiesMenuUpdated = vrApi.onPropertiesMenuUpdated;
+            }).catch(err => console.error("Error loading VR module:", err));
         }
     });
-}
-
-// --- VR Controllers ---
-const controllerModelFactory = new XRControllerModelFactory();
-
-controller1 = renderer.xr.getController(0);
-controller1.addEventListener('selectstart', onSelectStart);
-controller1.addEventListener('selectend', onSelectEnd);
-scene.add(controller1);
-
-controller2 = renderer.xr.getController(1);
-controller2.addEventListener('selectstart', onSelectStart);
-controller2.addEventListener('selectend', onSelectEnd);
-scene.add(controller2);
-
-const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
-const rayLine = new THREE.Line(rayGeometry);
-rayLine.name = 'ray';
-rayLine.scale.z = 5;
-
-controller1.add(rayLine.clone());
-controller2.add(rayLine.clone());
-
-controllerGrip1 = renderer.xr.getControllerGrip(0);
-controllerGrip1.add(controllerModelFactory.createControllerModel(controllerGrip1));
-scene.add(controllerGrip1);
-
-controllerGrip2 = renderer.xr.getControllerGrip(1);
-controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
-scene.add(controllerGrip2);
-
-renderer.xr.addEventListener('sessionstart', () => {
-    if (avatar) avatar.visible = false;
-    
-    // Attach everything to avatarGroup so head and hands move with it
-    avatarGroup.add(camera);
-    avatarGroup.add(controller1);
-    avatarGroup.add(controller2);
-    avatarGroup.add(controllerGrip1);
-    avatarGroup.add(controllerGrip2);
-    
-    if (hudMesh) {
-        hudMesh.visible = true;
-        controller1.add(hudMesh); 
-        hudMesh.position.set(0, 0.1, 0); // Position it on top of the left controller
-        hudMesh.rotation.x = -Math.PI / 2; // Flat on the controller
-    }
-    
-    controls.enabled = false; // Disable OrbitControls in VR
-});
-
-renderer.xr.addEventListener('sessionend', () => {
-    if (avatar) avatar.visible = true;
-    
-    // Move back to scene
-    scene.add(camera);
-    scene.add(controller1);
-    scene.add(controller2);
-    scene.add(controllerGrip1);
-    scene.add(controllerGrip2);
-    
-    if (hudMesh) {
-        hudMesh.visible = false;
-        scene.add(hudMesh);
-    }
-    if (propertiesMesh) {
-        propertiesMesh.visible = false;
-        scene.add(propertiesMesh);
-    }
-    
-    controls.enabled = true;
-});
-
-// --- VR Interaction Setup ---
-interactiveGroup = new InteractiveGroup(renderer, camera);
-scene.add(interactiveGroup);
-interactiveGroup.add(avatarGroup);
-
-const hudElement = document.getElementById('hud');
-hudMesh = new HTMLMesh(hudElement);
-hudMesh.position.set(0.15, 0.05, -0.15); // Offset from controller
-hudMesh.rotation.x = -Math.PI / 4;
-hudMesh.scale.setScalar(0.25);
-hudMesh.visible = false;
-interactiveGroup.add(hudMesh);
-
-const propsElement = document.getElementById('properties-menu');
-propertiesMesh = new HTMLMesh(propsElement);
-propertiesMesh.position.set(-0.15, 0.05, -0.15); // Offset from controller
-propertiesMesh.rotation.x = -Math.PI / 4;
-propertiesMesh.scale.setScalar(0.3);
-propertiesMesh.visible = false;
-interactiveGroup.add(propertiesMesh);
-
-// --- VR Interaction Logic ---
-let vrGrabbedObject = null;
-const vrRaycaster = new THREE.Raycaster();
-
-function onSelectStart(event) {
-    const controller = event.target;
-    const intersections = getIntersections(controller);
-    
-    if (intersections.length > 0) {
-        let intersection = intersections[0];
-        let object = intersection.object;
-        
-        // Handle HTMLMesh clicks (Handled automatically by InteractiveGroup, but we might need to block object selection)
-        if (object instanceof HTMLMesh) return;
-
-        while (object.parent && object.parent !== scene && !object.userData.isSelectable) {
-            object = object.parent;
-        }
-        
-        if (object.userData && object.userData.isSelectable) {
-            currentPlacedObject = object;
-            vrGrabbedObject = object;
-            updatePropertiesMenu(currentPlacedObject);
-            if (transformControls) transformControls.detach();
-        }
-    }
-}
-
-function onSelectEnd() {
-    vrGrabbedObject = null;
-    saveWorld();
-}
-
-function getIntersections(controller) {
-    const tempMatrix = new THREE.Matrix4();
-    tempMatrix.identity().extractRotation(controller.matrixWorld);
-    vrRaycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
-    vrRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
-
-    const selectableObjects = [];
-    scene.traverse((obj) => {
-        if (obj.userData && obj.userData.isSelectable) selectableObjects.push(obj);
-    });
-    return vrRaycaster.intersectObjects(selectableObjects, true);
-}
-
-function updateVRGrab() {
-    if (vrGrabbedObject) {
-        const controller = (controller1.add === vrGrabbedObject.parent) ? controller1 : controller2;
-        // If we want the object to follow the controller's ray
-        const tempMatrix = new THREE.Matrix4();
-        tempMatrix.identity().extractRotation(controller2.matrixWorld);
-        const dir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-        const pos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
-        
-        // Move object to a distance in front of controller
-        vrGrabbedObject.position.copy(pos).addScaledVector(dir, 2);
-        
-        // Basic snapping for VR grab
-        const groundRay = new THREE.Raycaster(vrGrabbedObject.position, new THREE.Vector3(0, -1, 0));
-        const hits = groundRay.intersectObjects(collisionMeshes, false);
-        if (hits.length > 0) {
-            vrGrabbedObject.position.y = hits[0].point.y;
-        }
-        
-        updatePropertiesMenu(vrGrabbedObject);
-    }
 }
 
 // --- HUD & Interaction Logic ---
@@ -1331,17 +1155,13 @@ document.getElementById('properties-header').addEventListener('click', () => {
 });
 
 function updatePropertiesMenu(object) {
+    onVRPropertiesMenuUpdated(object);
+    
     if (!object) {
         propMenu.classList.add('hidden');
-        if (propertiesMesh) propertiesMesh.visible = false;
         return;
     }
     propMenu.classList.remove('hidden');
-    
-    if (renderer.xr.isPresenting && propertiesMesh) {
-        propertiesMesh.visible = true;
-        controller2.add(propertiesMesh); // Attach to right hand
-    }
     ['x', 'y', 'z'].forEach(axis => {
         const val = object.position[axis].toFixed(2);
         propInputs[axis].slider.value = val;
@@ -1615,6 +1435,11 @@ function spawnObject(mesh, type, fileName = null) {
     mesh.userData.type = type;
     mesh.userData.fileName = fileName;
     
+    // Default to box collision for better performance
+    mesh.userData.collision = true;
+    mesh.userData.collisionType = 'box';
+    createBoxProxy(mesh);
+    
     scene.add(mesh);
     mesh.traverse(n => { 
         if(n.isMesh && !n.geometry.boundsTree) n.geometry.computeBoundsTree(); 
@@ -1836,25 +1661,6 @@ document.body.appendChild(stats.dom);
 // Use a simple timer if Clock/Timer is problematic
 let lastTime = performance.now();
 
-function updateVRInput() {
-    vrMoveVector.set(0, 0);
-    vrLookVector.set(0, 0);
-    
-    const session = renderer.xr.getSession();
-    if (session) {
-        for (const source of session.inputSources) {
-            if (source.gamepad) {
-                const axes = source.gamepad.axes;
-                // WebXR standard gamepad mapping: axes[2] is horizontal, axes[3] is vertical
-                if (source.handedness === 'left') {
-                    vrMoveVector.set(axes[2], -axes[3]);
-                } else if (source.handedness === 'right') {
-                    vrLookVector.set(axes[2], -axes[3]);
-                }
-            }
-        }
-    }
-}
 
 function animate() {
     stats.begin();
