@@ -94,6 +94,9 @@ export function initVR(deps) {
             }
         });
         
+        const hudEl = document.getElementById('hud');
+        if (hudEl) hudEl.classList.remove('hidden');
+        
         // Hide all menus
         vrMenus.forEach(updateFn => updateFn());
         
@@ -111,6 +114,8 @@ export function initVR(deps) {
     const interactiveGroup = new InteractiveGroup(renderer, camera);
     scene.add(interactiveGroup);
     interactiveGroup.add(avatarGroup);
+    interactiveGroup.listenToXRControllerEvents(controller1);
+    interactiveGroup.listenToXRControllerEvents(controller2);
 
     const vrMenus = [];
 
@@ -232,6 +237,8 @@ export function initVR(deps) {
         }
     }
 
+    let lastXButtonPressed = false;
+
     function updateVRInput() {
         deps.vrState.vrMoveVector.set(0, 0);
         deps.vrState.vrLookVector.set(0, 0);
@@ -248,6 +255,16 @@ export function initVR(deps) {
                         deps.vrState.vrMoveVector.set(axes[2] || 0, -(axes[3] || 0));
                         // Grip button (usually button 1)
                         if (source.gamepad.buttons[1] && source.gamepad.buttons[1].pressed) isSprinting = true;
+                        
+                        // X Button (button 4 on left controller) to toggle HUD
+                        if (source.gamepad.buttons[4]) {
+                            const isXPressed = source.gamepad.buttons[4].pressed;
+                            if (isXPressed && !lastXButtonPressed) {
+                                const hudEl = document.getElementById('hud');
+                                if (hudEl) hudEl.classList.toggle('hidden');
+                            }
+                            lastXButtonPressed = isXPressed;
+                        }
                     } else if (source.handedness === 'right') {
                         deps.vrState.vrLookVector.set(axes[2] || 0, -(axes[3] || 0));
                         // A button (usually button 4 or 5. We check both just in case, or stick to 4)
