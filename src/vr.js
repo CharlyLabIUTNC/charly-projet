@@ -15,7 +15,24 @@ export function initVR(deps) {
     } = deps;
 
     renderer.xr.enabled = true;
-    document.body.appendChild(VRButton.createButton(renderer));
+    
+    const vrButton = VRButton.createButton(renderer);
+    // Supprimer les styles absolus par défaut de VRButton
+    vrButton.style.position = 'static';
+    vrButton.style.transform = 'none';
+    vrButton.style.bottom = 'auto';
+    vrButton.style.left = 'auto';
+    vrButton.style.width = '100%';
+    vrButton.style.margin = '0 0 10px 0';
+    vrButton.classList.add('hud-btn');
+
+    const hud = document.getElementById('hud');
+    if (hud) {
+        // Ajouter le bouton tout en haut du menu HUD
+        hud.insertBefore(vrButton, hud.firstChild);
+    } else {
+        document.body.appendChild(vrButton);
+    }
 
     const controllerModelFactory = new XRControllerModelFactory();
 
@@ -45,7 +62,7 @@ export function initVR(deps) {
     controllerGrip2.add(controllerModelFactory.createControllerModel(controllerGrip2));
     scene.add(controllerGrip2);
 
-    let hudMesh, propertiesMesh;
+    let hudMenu, propertiesMenu, addGlbMenu, mapModalMenu;
 
     renderer.xr.addEventListener('sessionstart', () => {
         // Hide avatar to avoid seeing inside mesh
@@ -86,14 +103,7 @@ export function initVR(deps) {
         scene.add(controllerGrip1);
         scene.add(controllerGrip2);
         
-        if (hudMesh) {
-            hudMesh.visible = false;
-            scene.add(hudMesh);
-        }
-        if (propertiesMesh) {
-            propertiesMesh.visible = false;
-            scene.add(propertiesMesh);
-        }
+        // Visibility cleanup is handled automatically by the updateFn logic
         
         controls.enabled = true;
     });
@@ -106,15 +116,24 @@ export function initVR(deps) {
 
     function createVRMenu(domId, scale) {
         const el = document.getElementById(domId);
-        if (!el) return null;
+        if (!el) return { mesh: null };
         const contentEl = el.querySelector('.modal-content') || el;
-        const mesh = new HTMLMesh(contentEl);
-        mesh.scale.setScalar(scale);
-        mesh.visible = false;
-        interactiveGroup.add(mesh);
         
+        let mesh = null;
+
         const updateVisibility = () => {
-            mesh.visible = renderer.xr.isPresenting && !el.classList.contains('hidden');
+            const shouldBeVisible = renderer.xr.isPresenting && !el.classList.contains('hidden');
+            
+            if (shouldBeVisible && !mesh) {
+                // Instantiate HTMLMesh only when the menu first becomes visible
+                mesh = new HTMLMesh(contentEl);
+                mesh.scale.setScalar(scale);
+                interactiveGroup.add(mesh);
+            }
+            
+            if (mesh) {
+                mesh.visible = shouldBeVisible;
+            }
         };
 
         const observer = new MutationObserver(updateVisibility);
@@ -124,14 +143,15 @@ export function initVR(deps) {
         
         vrMenus.push(updateVisibility);
         
-        return mesh;
+        return { 
+            get mesh() { return mesh; } 
+        };
     }
 
-
-    hudMesh = createVRMenu('hud', 0.25);
-    propertiesMesh = createVRMenu('properties-menu', 0.3);
-    let addGlbMesh = createVRMenu('add-glb-modal', 0.25);
-    let mapModalMesh = createVRMenu('map-modal', 0.25);
+    hudMenu = createVRMenu('hud', 0.25);
+    propertiesMenu = createVRMenu('properties-menu', 0.3);
+    addGlbMenu = createVRMenu('add-glb-modal', 0.25);
+    mapModalMenu = createVRMenu('map-modal', 0.25);
 
     // Position offsets for menus relative to the left controller
     const offsets = {
@@ -193,11 +213,11 @@ export function initVR(deps) {
 
     function updateVRGrab() {
         if (vrGrabbedObject) {
-            const controller = (controller1.add === vrGrabbedObject.parent) ? controller1 : controller2;
+            const controller = (controller1 === vrGrabbedObject.parent) ? controller1 : controller2;
             const tempMatrix = new THREE.Matrix4();
-            tempMatrix.identity().extractRotation(controller2.matrixWorld);
+            tempMatrix.identity().extractRotation(controller.matrixWorld);
             const dir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-            const pos = new THREE.Vector3().setFromMatrixPosition(controller2.matrixWorld);
+            const pos = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
             
             vrGrabbedObject.position.copy(pos).addScaledVector(dir, 2);
             
@@ -242,21 +262,16 @@ export function initVR(deps) {
         deps.vrState.isVRJumping = isJumping;
         
         // Update menu transforms to follow the left controller
-        syncUIMesh(hudMesh, offsets.hud);
-        syncUIMesh(propertiesMesh, offsets.prop);
-        syncUIMesh(addGlbMesh, offsets.glb);
-        syncUIMesh(mapModalMesh, offsets.map);
+        syncUIMesh(hudMenu.mesh, offsets.hud);
+        syncUIMesh(propertiesMenu.mesh, offsets.prop);
+        syncUIMesh(addGlbMenu.mesh, offsets.glb);
+        syncUIMesh(mapModalMenu.mesh, offsets.map);
     }
 
     function onPropertiesMenuUpdated(object) {
-        if (!object) {
-            if (propertiesMesh) propertiesMesh.visible = false;
-        } else {
-            if (renderer.xr.isPresenting && propertiesMesh) {
-                propertiesMesh.visible = true;
-                controller2.add(propertiesMesh);
-            }
-        }
+        // Visibility is automatically managed by the MutationObserver
+        // listening to the '.hidden' class on the DOM element.
+        // syncUIMesh handles the positioning relative to the controller.
     }
 
     // Return the update function to be called in the main animation loop
