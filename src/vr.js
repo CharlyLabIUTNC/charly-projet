@@ -39,11 +39,13 @@ export function initVR(deps) {
     const controller1 = renderer.xr.getController(0);
     controller1.addEventListener('selectstart', onSelectStart);
     controller1.addEventListener('selectend', onSelectEnd);
+    controller1.addEventListener('connected', (e) => controller1.userData.source = e.data);
     scene.add(controller1);
 
     const controller2 = renderer.xr.getController(1);
     controller2.addEventListener('selectstart', onSelectStart);
     controller2.addEventListener('selectend', onSelectEnd);
+    controller2.addEventListener('connected', (e) => controller2.userData.source = e.data);
     scene.add(controller2);
 
     const rayGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
@@ -133,6 +135,7 @@ export function initVR(deps) {
                 // Instantiate HTMLMesh only when the menu first becomes visible
                 mesh = new HTMLMesh(contentEl);
                 mesh.scale.setScalar(scale);
+                mesh.userData.domElement = el; // Store the original wrapper for scrolling
                 interactiveGroup.add(mesh);
             }
             
@@ -160,10 +163,10 @@ export function initVR(deps) {
 
     // Position offsets for menus relative to the left controller
     const offsets = {
-        hud: { pos: new THREE.Vector3(0.15, 0.05, -0.15), rotX: -Math.PI / 4 },
-        prop: { pos: new THREE.Vector3(-0.15, 0.05, -0.15), rotX: -Math.PI / 4 },
-        glb: { pos: new THREE.Vector3(0, 0.15, -0.2), rotX: -Math.PI / 6 },
-        map: { pos: new THREE.Vector3(0, 0.15, -0.2), rotX: -Math.PI / 6 }
+        hud: { pos: new THREE.Vector3(-0.25, 0.05, -0.15), rotX: -Math.PI / 4 },
+        prop: { pos: new THREE.Vector3(-0.25, 0.05, -0.15), rotX: -Math.PI / 4 },
+        glb: { pos: new THREE.Vector3(-0.25, 0.15, -0.2), rotX: -Math.PI / 6 },
+        map: { pos: new THREE.Vector3(-0.25, 0.15, -0.2), rotX: -Math.PI / 6 }
     };
 
     function syncUIMesh(mesh, offsetInfo) {
@@ -205,6 +208,7 @@ export function initVR(deps) {
             if (object.userData && object.userData.isSelectable) {
                 setCurrentPlacedObject(object);
                 vrGrabbedObject = object;
+                controller.attach(vrGrabbedObject); // Use attach for free movement in VR
                 updatePropertiesMenu(getCurrentPlacedObject());
                 if (transformControls) transformControls.detach();
             }
@@ -212,27 +216,76 @@ export function initVR(deps) {
     }
 
     function onSelectEnd() {
-        vrGrabbedObject = null;
-        saveWorld();
+        if (vrGrabbedObject) {
+            scene.attach(vrGrabbedObject); // Detach and keep world transform
+            vrGrabbedObject = null;
+            saveWorld();
+        }
+    }
+
+    function handleInteractionRay(controller) {
+        if (!controller.visible) return;
+        
+        const tempMatrix = new THREE.Matrix4();
+        tempMatrix.identity().extractRotation(controller.matrixWorld);
+        vrRaycaster.ray.origin.setFromMatrixPosition(controller.matrixWorld);
+        vrRaycaster.ray.direction.set(0, 0, -1).applyMatrix4(tempMatrix);
+
+        const interactables = [];
+        scene.traverse((obj) => {
+            if ((obj.userData && obj.userData.isSelectable) || obj instanceof HTMLMesh) interactables.push(obj);
+        });
+
+        const intersections = vrRaycaster.intersectObjects(interactables, true);
+        const line = controller.getObjectByName('ray');
+        
+        if (intersections.length > 0) {
+            let intersection = intersections[0];
+            let obj = intersection.object;
+
+            if (line) line.scale.z = intersection.distance;
+            
+            // Find root selectable or HTMLMesh
+            while (obj.parent && obj.parent !== scene && !(obj.userData && obj.userData.isSelectable) && !(obj instanceof HTMLMesh)) {
+                obj = obj.parent;
+            }
+
+            if (controller.userData.lastHovered !== obj) {
+                controller.userData.lastHovered = obj;
+                const source = controller.userData.source;
+                if (source && source.gamepad && source.gamepad.hapticActuators && source.gamepad.hapticActuators[0]) {
+                    source.gamepad.hapticActuators[0].pulse(0.3, 50);
+                }
+            }
+
+            // Joystick Scroll for HTMLMesh
+            if (obj instanceof HTMLMesh) {
+                const source = controller.userData.source;
+                if (source && source.gamepad) {
+                    const axes = source.gamepad.axes;
+                    const yAxis = axes[3] || 0; // Thumbstick Y
+                    if (Math.abs(yAxis) > 0.1) {
+                        const domElement = obj.userData.domElement;
+                        if (domElement) {
+                            let scrollable = domElement;
+                            if (domElement.id === 'properties-menu') scrollable = document.getElementById('properties-content') || domElement;
+                            else if (domElement.id === 'add-glb-modal') scrollable = domElement.querySelector('.modal-content') || domElement;
+                            else if (domElement.id === 'map-modal') scrollable = domElement.querySelector('.modal-content') || domElement;
+                            
+                            scrollable.scrollTop += yAxis * 15;
+                        }
+                    }
+                }
+            }
+        } else {
+            if (line) line.scale.z = 5;
+            controller.userData.lastHovered = null;
+        }
     }
 
     function updateVRGrab() {
         if (vrGrabbedObject) {
-            const controller = (controller1 === vrGrabbedObject.parent) ? controller1 : controller2;
-            const tempMatrix = new THREE.Matrix4();
-            tempMatrix.identity().extractRotation(controller.matrixWorld);
-            const dir = new THREE.Vector3(0, 0, -1).applyMatrix4(tempMatrix);
-            const pos = new THREE.Vector3().setFromMatrixPosition(controller.matrixWorld);
-            
-            vrGrabbedObject.position.copy(pos).addScaledVector(dir, 2);
-            
-            const collisionMeshes = getCollisionMeshes();
-            const groundRay = new THREE.Raycaster(vrGrabbedObject.position, new THREE.Vector3(0, -1, 0));
-            const hits = groundRay.intersectObjects(collisionMeshes, false);
-            if (hits.length > 0) {
-                vrGrabbedObject.position.y = hits[0].point.y;
-            }
-            
+            // Object is attached to controller, just update UI
             updatePropertiesMenu(vrGrabbedObject);
         }
     }
@@ -260,8 +313,22 @@ export function initVR(deps) {
                         if (source.gamepad.buttons[4]) {
                             const isXPressed = source.gamepad.buttons[4].pressed;
                             if (isXPressed && !lastXButtonPressed) {
-                                const hudEl = document.getElementById('hud');
-                                if (hudEl) hudEl.classList.toggle('hidden');
+                                const addGlb = document.getElementById('add-glb-modal');
+                                const mapModal = document.getElementById('map-modal');
+                                const propModal = document.getElementById('properties-menu');
+                                
+                                const isGlbOpen = addGlb && !addGlb.classList.contains('hidden');
+                                const isMapOpen = mapModal && !mapModal.classList.contains('hidden');
+                                const isPropOpen = propModal && !propModal.classList.contains('hidden');
+
+                                if (isGlbOpen || isMapOpen || isPropOpen) {
+                                    if (addGlb) addGlb.classList.add('hidden');
+                                    if (mapModal) mapModal.classList.add('hidden');
+                                    if (propModal) propModal.classList.add('hidden');
+                                } else {
+                                    const hudEl = document.getElementById('hud');
+                                    if (hudEl) hudEl.classList.toggle('hidden');
+                                }
                             }
                             lastXButtonPressed = isXPressed;
                         }
@@ -278,6 +345,10 @@ export function initVR(deps) {
         deps.vrState.isVRSprinting = isSprinting;
         deps.vrState.isVRJumping = isJumping;
         
+        // Handle interaction rays (haptics, visual feedback, scrolling)
+        handleInteractionRay(controller1);
+        handleInteractionRay(controller2);
+
         // Update menu transforms to follow the left controller
         syncUIMesh(hudMenu.mesh, offsets.hud);
         syncUIMesh(propertiesMenu.mesh, offsets.prop);
