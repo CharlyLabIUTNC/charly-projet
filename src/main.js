@@ -1283,6 +1283,11 @@ function setGizmoMode(mode) {
     Object.entries(gizmoModeBtns).forEach(([key, btn]) => {
         btn.classList.toggle('active', key === mode);
     });
+    
+    // Toggle relevant properties
+    document.getElementById('position-controls-group').style.display = (mode === 'translate') ? 'block' : 'none';
+    document.getElementById('rotation-controls-group').style.display = (mode === 'rotate') ? 'block' : 'none';
+    document.getElementById('scale-controls-group').style.display = (mode === 'scale') ? 'block' : 'none';
 }
 
 gizmoModeBtns.translate.addEventListener('click', () => setGizmoMode('translate'));
@@ -1296,6 +1301,47 @@ window.addEventListener('keydown', (e) => {
     if (e.code === 'KeyG') setGizmoMode('translate');
     if (e.code === 'KeyR') setGizmoMode('rotate');
     if (e.code === 'KeyT') setGizmoMode('scale');
+});
+
+window.isRotationLocked = false;
+document.getElementById('btn-lock-rotation').addEventListener('click', (e) => {
+    window.isRotationLocked = !window.isRotationLocked;
+    e.target.textContent = window.isRotationLocked ? '🔒 Rotation: Bloquée' : '🔓 Rotation: Libre';
+});
+
+document.getElementById('btn-align-surface').addEventListener('click', () => {
+    if (!currentPlacedObject) return;
+    // Raycast straight down from the object to find the floor/surface
+    const raycaster = new THREE.Raycaster();
+    const upVector = new THREE.Vector3(0, 1, 0); // Assuming standard up
+    
+    // We want to align the object's bottom to the surface
+    
+    const objPos = new THREE.Vector3();
+    currentPlacedObject.getWorldPosition(objPos);
+    
+    // Raycast down
+    raycaster.set(objPos.clone().add(new THREE.Vector3(0, 0.5, 0)), new THREE.Vector3(0, -1, 0));
+    const intersects = raycaster.intersectObject(scene, true).filter(hit => hit.object !== currentPlacedObject && (!currentPlacedObject.children.includes(hit.object)));
+    
+    if (intersects.length > 0) {
+        const hit = intersects[0];
+        
+        // Align the object's up vector (Y axis) with the surface normal
+        const normal = hit.face.normal.clone();
+        normal.transformDirection(hit.object.matrixWorld).normalize();
+        
+        const quaternion = new THREE.Quaternion().setFromUnitVectors(upVector, normal);
+        
+        // Combine with current rotation around Y if desired, or just replace entirely
+        currentPlacedObject.quaternion.copy(quaternion);
+        
+        // Place object on surface
+        currentPlacedObject.position.copy(hit.point);
+        
+        updatePropertiesMenu(currentPlacedObject);
+        saveWorld();
+    }
 });
 
 document.getElementById('btn-collision-toggle').addEventListener('click', (e) => {
@@ -1556,6 +1602,20 @@ fileInput.addEventListener('change', async (e) => {
 const glbFileInput = document.getElementById('glb-file-input');
 dropZone.addEventListener('click', () => glbFileInput.click());
 
+// Add a helper function to spawn imported GLBs immediately
+function spawnGlbFromArrayBuffer(arrayBuffer, fileName) {
+    const blob = new Blob([arrayBuffer]);
+    const url = URL.createObjectURL(blob);
+    new GLTFLoader().load(url, (gltf) => {
+        spawnObject(gltf.scene, 'custom_glb', fileName);
+        URL.revokeObjectURL(url);
+    }, undefined, (error) => {
+        console.error("Erreur de chargement GLTF:", error);
+        URL.revokeObjectURL(url);
+        showToast("Erreur lors de l'instanciation de " + fileName);
+    });
+}
+
 glbFileInput.addEventListener('change', async (e) => {
     if (e.target.files.length > 0) {
         const file = e.target.files[0];
@@ -1569,9 +1629,48 @@ glbFileInput.addEventListener('change', async (e) => {
                 localStorage.setItem('inventory', JSON.stringify(inventory));
                 updateInventoryUI();
             }
+            
+            // Spawn the object immediately on the site
+            spawnGlbFromArrayBuffer(arrayBuffer, file.name);
+            document.getElementById('add-glb-modal').classList.add('hidden');
         }
     }
 });
+
+const btnLoadGlbUrl = document.getElementById('btn-load-glb-url');
+const glbUrlInput = document.getElementById('glb-url-input');
+if (btnLoadGlbUrl && glbUrlInput) {
+    btnLoadGlbUrl.addEventListener('click', async () => {
+        const url = glbUrlInput.value.trim();
+        if (!url) return;
+        try {
+            btnLoadGlbUrl.textContent = '...';
+            const response = await fetch(url);
+            if (!response.ok) throw new Error('Network response was not ok');
+            const arrayBuffer = await response.arrayBuffer();
+            const fileName = url.split('/').pop().split('?')[0] || 'downloaded_model.glb';
+            
+            await saveFileToDB(fileName, arrayBuffer);
+            const inventory = JSON.parse(localStorage.getItem('inventory') || '[]');
+            if (!inventory.includes(fileName)) {
+                inventory.push(fileName);
+                localStorage.setItem('inventory', JSON.stringify(inventory));
+                updateInventoryUI();
+            }
+            glbUrlInput.value = '';
+            
+            // Spawn the object immediately on the site
+            spawnGlbFromArrayBuffer(arrayBuffer, fileName);
+            document.getElementById('add-glb-modal').classList.add('hidden');
+            showToast("URL importée !");
+        } catch (error) {
+            console.error('Error fetching GLB:', error);
+            showToast("Erreur lors de l'import : " + error.message);
+        } finally {
+            btnLoadGlbUrl.textContent = 'Charger URL';
+        }
+    });
+}
 
 dropZone.addEventListener('dragover', (e) => {
     e.preventDefault();

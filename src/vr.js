@@ -269,6 +269,9 @@ export function initVR(deps) {
                 } else {
                     vrGrabbedObject = object;
                     grabbedByController = controller;
+                    window._vrGrabbedInitialRotation = new THREE.Quaternion();
+                    vrGrabbedObject.getWorldQuaternion(window._vrGrabbedInitialRotation);
+                    
                     controller.attach(vrGrabbedObject); // Use attach for free movement in VR
                     updatePropertiesMenu(getCurrentPlacedObject());
                     if (transformControls) transformControls.detach();
@@ -376,7 +379,13 @@ export function initVR(deps) {
                 const currentDistance = controller1.position.distanceTo(controller2.position);
                 const scaleFactor = currentDistance / initialPinchDistance;
                 vrGrabbedObject.scale.copy(initialObjectScale).multiplyScalar(scaleFactor);
+            } else if (window.isRotationLocked && grabbedByController && window._vrGrabbedInitialRotation) {
+                // Keep world rotation isolated and constant
+                const parentWorldQuat = new THREE.Quaternion();
+                grabbedByController.getWorldQuaternion(parentWorldQuat);
+                vrGrabbedObject.quaternion.copy(parentWorldQuat.invert().multiply(window._vrGrabbedInitialRotation));
             }
+
             if (Date.now() - lastUIUpdateTime > 500) {
                 // Object is attached to controller, just update UI rarely to prevent HTMLMesh lag
                 updatePropertiesMenu(vrGrabbedObject);
