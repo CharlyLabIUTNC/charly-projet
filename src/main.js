@@ -521,6 +521,28 @@ function switchMap(mapName, isBuiltin = false) {
     }
 }
 
+function deleteCustomMap(mapName) {
+    if (confirm(`Voulez-vous vraiment supprimer la map "${mapName}" ?`)) {
+        deleteFileFromDB(mapName).then(() => {
+            let inv = getMapInventory();
+            inv = inv.filter(entry => entry.name !== mapName);
+            saveMapInventory(inv);
+            
+            localStorage.removeItem(`mapTransform_${mapName}`);
+            localStorage.removeItem(`spawnPoint_${mapName}`);
+            localStorage.removeItem(`savedWorld_${mapName}`);
+            
+            if (activeMapName === mapName) {
+                let firstBuiltin = inv.find(e => e.isBuiltin);
+                if (firstBuiltin) {
+                    switchMap(firstBuiltin.name, true);
+                }
+            }
+            updateMapInventoryUI();
+        });
+    }
+}
+
 function updateMapInventoryUI() {
     const container = document.getElementById('map-inventory-container');
     if (!container) return;
@@ -556,6 +578,27 @@ function updateMapInventoryUI() {
             else enterMapEditMode();
         };
         btns.appendChild(editBtn);
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.className = 'hud-btn';
+        refreshBtn.textContent = '🔄 Actualiser';
+        refreshBtn.onclick = () => {
+            document.getElementById('map-modal').classList.add('hidden');
+            switchMap(entry.name, entry.isBuiltin);
+        };
+        btns.appendChild(refreshBtn);
+
+        if (!entry.isBuiltin) {
+            const deleteBtn = document.createElement('button');
+            deleteBtn.className = 'hud-btn';
+            deleteBtn.style.color = '#ff6b6b';
+            deleteBtn.textContent = '🗑️ Supprimer';
+            deleteBtn.onclick = (e) => {
+                e.stopPropagation();
+                deleteCustomMap(entry.name);
+            };
+            btns.appendChild(deleteBtn);
+        }
 
         row.appendChild(btns);
         
