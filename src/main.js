@@ -386,7 +386,7 @@ function createBoxProxy(object) {
 
 
 // --- Map Manager State ---
-let activeMapName = localStorage.getItem('activeMap') || 'CharlyVerse';
+let activeMapName = localStorage.getItem('activeMap') || 'charlylab';
 let isMapEditMode = false;
 
 function getMapInventory() {
@@ -1880,15 +1880,15 @@ mapDropZone.addEventListener('drop', async (e) => {
 initDB().then(() => {
     updateInventoryUI();
     
-    // Ensure CharlyVerse is in map inventory
+    // Ensure charlylab is in map inventory
     const inv = getMapInventory();
-    if (!inv.find(m => m.name === 'CharlyVerse')) {
-        inv.unshift({ name: 'CharlyVerse', isBuiltin: true });
+    if (!inv.find(m => m.name === 'charlylab')) {
+        inv.unshift({ name: 'charlylab', isBuiltin: true });
         saveMapInventory(inv);
     }
     
     // Load the active map
-    const activeEntry = inv.find(m => m.name === activeMapName) || { name: 'CharlyVerse', isBuiltin: true };
+    const activeEntry = inv.find(m => m.name === activeMapName) || { name: 'charlylab', isBuiltin: true };
     switchMap(activeEntry.name, activeEntry.isBuiltin);
 });
 
