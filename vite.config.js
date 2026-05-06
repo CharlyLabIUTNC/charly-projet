@@ -7,5 +7,22 @@ export default defineConfig({
   },
   optimizeDeps: {
     exclude: ['three']
+  },
+  build: {
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('node_modules/three-mesh-bvh')) {
+            return 'bvh';
+          }
+          if (id.includes('node_modules/three')) {
+            return 'three';
+          }
+          if (id.includes('node_modules/html2canvas')) {
+            return 'html2canvas';
+          }
+        }
+      }
+    }
   }
 });

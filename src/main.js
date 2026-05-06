@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
@@ -141,7 +142,7 @@ function updateInventoryUI() {
             if (arrayBuffer) {
                 const blob = new Blob([arrayBuffer]);
                 const url = URL.createObjectURL(blob);
-                new GLTFLoader().load(url, (gltf) => {
+                gltfLoader.load(url, (gltf) => {
                     spawnObject(gltf.scene, 'custom_glb', fileName);
                     URL.revokeObjectURL(url);
                 }, undefined, (error) => {
@@ -193,6 +194,9 @@ function removeFileFromInventory(fileName) {
 
 // Global loaders for reuse
 const gltfLoader = new GLTFLoader();
+const dracoLoader = new DRACOLoader();
+dracoLoader.setDecoderPath('https://www.gstatic.com/draco/versioned/decoders/1.5.7/');
+gltfLoader.setDRACOLoader(dracoLoader);
 
 async function loadWorld() {
     // Clear existing selectable objects
@@ -669,7 +673,7 @@ function fadeToAction(name, duration) {
     }
 }
 
-new GLTFLoader().load('/models/avatar/avatar.glb', function (model) {
+gltfLoader.load('/models/avatar/avatar.glb', function (model) {
     gltf = model;
     avatar.add(gltf.scene);
     avatarGroup.add(avatar);
@@ -1606,7 +1610,7 @@ dropZone.addEventListener('click', () => glbFileInput.click());
 function spawnGlbFromArrayBuffer(arrayBuffer, fileName) {
     const blob = new Blob([arrayBuffer]);
     const url = URL.createObjectURL(blob);
-    new GLTFLoader().load(url, (gltf) => {
+    gltfLoader.load(url, (gltf) => {
         spawnObject(gltf.scene, 'custom_glb', fileName);
         URL.revokeObjectURL(url);
     }, undefined, (error) => {
@@ -1700,7 +1704,7 @@ dropZone.addEventListener('drop', async (e) => {
             
             const blob = new Blob([arrayBuffer]);
             const url = URL.createObjectURL(blob);
-            new GLTFLoader().load(url, (gltf) => {
+            gltfLoader.load(url, (gltf) => {
                 const mesh = gltf.scene;
                 spawnObject(mesh, 'custom_glb', file.name);
                 URL.revokeObjectURL(url);
@@ -1960,4 +1964,14 @@ window.addEventListener('resize', () => {
     renderer.setSize(window.innerWidth, window.innerHeight);
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
+});
+
+// Fix BFCache issues by closing open IndexedDB connections and stopping the renderer
+window.addEventListener('pagehide', (event) => {
+    if (db) {
+        db.close();
+    }
+    if (renderer) {
+        renderer.setAnimationLoop(null);
+    }
 });
