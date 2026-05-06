@@ -1712,6 +1712,109 @@ dropZone.addEventListener('drop', async (e) => {
 });
 
 // --- Map Modal & Map Management Event Listeners ---
+
+// Export/Import Map Logic
+async function exportMap() {
+    const exportData = {
+        version: 1,
+        mapName: activeMapName,
+        isBuiltin: getMapInventory().find(m => m.name === activeMapName)?.isBuiltin || false,
+        mapTransform: JSON.parse(localStorage.getItem(`mapTransform_${activeMapName}`) || 'null'),
+        spawnPoint: JSON.parse(localStorage.getItem(getMapSpawnKey(activeMapName)) || 'null'),
+        worldData: JSON.parse(localStorage.getItem(`savedWorld_${activeMapName}`) || '[]'),
+        assets: {}
+    };
+
+    const arrayBufferToBase64 = (buffer) => {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+            binary += String.fromCharCode(bytes[i]);
+        }
+        return window.btoa(binary);
+    };
+
+    if (!exportData.isBuiltin) {
+        const mapBuffer = await getFileFromDB(exportData.mapName);
+        if (mapBuffer) {
+            exportData.assets[exportData.mapName] = arrayBufferToBase64(mapBuffer);
+        }
+    }
+
+    for (const obj of exportData.worldData) {
+        if (obj.type === 'custom_glb' && obj.fileName && !exportData.assets[obj.fileName]) {
+            const buffer = await getFileFromDB(obj.fileName);
+            if (buffer) {
+                exportData.assets[obj.fileName] = arrayBufferToBase64(buffer);
+            }
+        }
+    }
+
+    const dataStr = JSON.stringify(exportData);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `charly_spatial_${activeMapName.replace(/[^a-z0-9]/gi, '_')}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+}
+
+function importMap(file) {
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+        try {
+            const data = JSON.parse(e.target.result);
+            if (!data.version || !data.mapName) throw new Error("Fichier de map invalide");
+
+            const base64ToArrayBuffer = (base64) => {
+                const binary_string = window.atob(base64);
+                const len = binary_string.length;
+                const bytes = new Uint8Array(len);
+                for (let i = 0; i < len; i++) {
+                    bytes[i] = binary_string.charCodeAt(i);
+                }
+                return bytes.buffer;
+            };
+
+            if (data.assets) {
+                for (const [fileName, base64] of Object.entries(data.assets)) {
+                    const buffer = base64ToArrayBuffer(base64);
+                    await saveFileToDB(fileName, buffer);
+                }
+            }
+
+            if (!data.isBuiltin) {
+                const inv = getMapInventory();
+                if (!inv.find(m => m.name === data.mapName)) {
+                    inv.push({ name: data.mapName, isBuiltin: false });
+                    saveMapInventory(inv);
+                }
+            }
+
+            if (data.mapTransform) localStorage.setItem(`mapTransform_${data.mapName}`, JSON.stringify(data.mapTransform));
+            if (data.spawnPoint) localStorage.setItem(getMapSpawnKey(data.mapName), JSON.stringify(data.spawnPoint));
+            if (data.worldData) localStorage.setItem(`savedWorld_${data.mapName}`, JSON.stringify(data.worldData));
+
+            updateMapInventoryUI();
+            switchMap(data.mapName, data.isBuiltin);
+            document.getElementById('map-modal').classList.add('hidden');
+        } catch (err) {
+            alert('Erreur lors de l\'import : ' + err.message);
+        }
+    };
+    reader.readAsText(file);
+}
+
+document.getElementById('btn-export-map').addEventListener('click', exportMap);
+document.getElementById('btn-import-map').addEventListener('click', () => {
+    document.getElementById('map-import-json-input').click();
+});
+document.getElementById('map-import-json-input').addEventListener('change', (e) => {
+    if (e.target.files.length > 0) importMap(e.target.files[0]);
+});
+
 document.getElementById('btn-change-map').addEventListener('click', () => {
     updateMapInventoryUI();
     document.getElementById('map-modal').classList.remove('hidden');

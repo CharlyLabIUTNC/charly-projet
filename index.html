@@ -6,6 +6,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Charly Spatial</title>
     <link rel="stylesheet" href="/src/style.css">
+    <meta name="description" content="Charly Spatial - Un jeu de type sandbox multijoueur en 3D, inspiré du site spatial.io, où les joueurs peuvent créer, partager et explorer des mondes virtuels.">
+    <meta name="keywords" content="Charly Spatial, jeu sandbox, 3D, création de mondes, exploration virtuelle, spatial.io, jeu en ligne, communauté de joueurs">
   </head>
   <body>
     <canvas id="app"></canvas>
@@ -150,6 +152,12 @@
         <button id="btn-close-map-modal" class="modal-close">&times;</button>
         <h2 style="margin-top: 0;">Gestion des Maps</h2>
         
+        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+          <button id="btn-export-map" class="hud-btn" style="flex: 1;">📤 Exporter la scène</button>
+          <button id="btn-import-map" class="hud-btn" style="flex: 1;">📥 Importer une scène</button>
+          <input type="file" id="map-import-json-input" accept=".json" style="display: none;">
+        </div>
+
         <div class="modal-section" id="map-import-section">
           <h3>Importer une Map (.glb)</h3>
           <div id="map-drop-zone" class="drop-zone">
