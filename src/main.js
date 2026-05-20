@@ -6,6 +6,7 @@ import { TransformControls } from 'three/examples/jsm/controls/TransformControls
 import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
 import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
+import { generateMuseum } from './museum.js';
 
 // Setup BVH for all geometries
 THREE.BufferGeometry.prototype.computeBoundsTree = computeBoundsTree;
@@ -471,12 +472,15 @@ function switchMap(mapName, isBuiltin = false) {
     mapLoaded = false;
     activeMapName = mapName;
     localStorage.setItem('activeMap', mapName);
-    const onLoad = (gltf) => {
+    const onLoad = async (gltf) => {
+        if (mapName === 'charlylab') {
+            await generateMuseum(gltf.scene, gltfLoader);
+        }
         map.add(gltf.scene);
         gltf.scene.traverse(n => { 
-            if(n.isMesh) {
+            if(n.isMesh && !n.userData.noCollision) {
                 n.userData.isMap = true;
-                n.geometry.computeBoundsTree(); // Generate BVH
+                if (!n.geometry.boundsTree) n.geometry.computeBoundsTree(); // Generate BVH
             } 
         });
         if (!scene.children.includes(map)) scene.add(map);
@@ -1924,7 +1928,18 @@ initDB().then(() => {
     updateInventoryUI();
     
     // Ensure charlylab is in map inventory
-    const inv = getMapInventory();
+    let inv = getMapInventory();
+    
+    // Remove CharlyVerse if it exists in the inventory (Cleanup)
+    if (inv.find(m => m.name === 'CharlyVerse')) {
+        inv = inv.filter(m => m.name !== 'CharlyVerse');
+        saveMapInventory(inv);
+        if (activeMapName === 'CharlyVerse') {
+            activeMapName = 'charlylab';
+            localStorage.setItem('activeMap', 'charlylab');
+        }
+    }
+
     if (!inv.find(m => m.name === 'charlylab')) {
         inv.unshift({ name: 'charlylab', isBuiltin: true });
         saveMapInventory(inv);

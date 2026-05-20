@@ -1,0 +1,476 @@
+{
+  "hall_of_fame": [
+    {
+      "id": 1,
+      "name": "Ziyi Wang",
+      "type": "person",
+      "roleDescription": "Stagiaire (2022)",
+      "date": "2022",
+      "description": "Ziyi s’est illustrée au sein du Charly Lab par le développement d’une application mobile permettant de parcourir Nancy et de découvrir les différents points d’intérêt de l’enseignement supérieur. L’application propose également une expérience en réalité mixte pour visualiser les établissements à proximité de son environnement.",
+      "img": ""
+    },
+    {
+      "id": 2,
+      "name": "José Guadalupe Muñoz Ramírez",
+      "type": "person",
+      "roleDescription": "Stagiaire (2025)",
+      "date": "2025",
+      "description": "José a développé une base de données de modèles 3D prêts à être imprimés sur les machines du Charly Lab. Il a également mis en place un système de pilotage à distance permettant d'envoyer des modèles depuis le site web vers les machines via le réseau local. Il a également participé en tant qu'accompagnateur au second bootcamp du Charly Lab.",
+      "img": ""
+    },
+    {
+      "id": 3,
+      "name": "Guillaume Gruet-Flemmich",
+      "type": "person",
+      "roleDescription": "Stagiaire (2022 - 2023)",
+      "date": "2022 - 2023",
+      "description": "Guillaume a réalisé une partie du logo actuel du Charly Lab et l'a décliné sur plusieurs goodies, notamment des porte-clés imprimés en 3D. Il a également participé à plusieurs ateliers de présentation du laboratoire, notamment auprès d'étudiants américains lors du premier bootcamp de l’IUT.",
+      "img": ""
+    },
+    {
+      "id": 4,
+      "name": "Thomas Muller",
+      "type": "person",
+      "roleDescription": "Stagiaire (2025)",
+      "date": "2025",
+      "description": "Stagiaire de seconde, Thomas a expérimenté l'impression 3D à travers divers projets, notamment la réalisation d'un robot. Il a également accompagné les étudiants internationaux lors du second bootcamp.",
+      "img": ""
+    },
+    {
+      "id": 5,
+      "name": "Adrien Schloesser",
+      "type": "person",
+      "roleDescription": "Stagiaire (2023)",
+      "date": "2023",
+      "description": "Adrien a développé une expérience 3D web autour du projet Vélo. Son travail visait à répondre à plusieurs problématiques techniques : l'utilisation de la VR sur le web, l'intégration de WebSockets pour le multijoueur et l'utilisation d'une manette via un navigateur.",
+      "img": ""
+    },
+    {
+      "id": 6,
+      "name": "Justine Prulière",
+      "type": "person",
+      "roleDescription": "Stagiaire (2023)",
+      "date": "2023",
+      "description": "En collaboration avec l'association JB-Thiery, Justine a participé à la création d'une application web ludique destinée aux personnes en situation de handicap, centrée sur l'apprentissage des principes de la photographie.",
+      "img": ""
+    },
+    {
+      "id": 7,
+      "name": "Aubin Jammas",
+      "type": "person",
+      "roleDescription": "Stagiaire (2024)",
+      "date": "2024",
+      "description": "Stagiaire de troisième, Aubin a mis en pratique l'utilisation des machines du lieu en assurant la conception et l'impression 3D de systèmes de rangement pour le Charly Lab.",
+      "img": ""
+    },
+    {
+      "id": 8,
+      "name": "Benjamin Auger",
+      "type": "person",
+      "roleDescription": "Étudiant IUT (2022 - 2025)",
+      "date": "2022 - 2025",
+      "description": "Étudiant particulièrement impliqué, Benjamin a réalisé le site web de 'Poke Drop', une animation de roue de la fortune permettant de gagner des impressions 3D lors de divers événements du Charly Lab. https://poke-drop.vercel.app/",
+      "img": ""
+    },
+    {
+      "id": 9,
+      "name": "Marie Jacquot",
+      "type": "person",
+      "roleDescription": "Stagiaire (2024)",
+      "date": "2024",
+      "description": "Marie a conçu différents goodies pour le stand du Charly Lab lors de la foire exposition et a participé à la préparation des visites du laboratoire pour l'année 2024-2025.",
+      "img": ""
+    },
+    {
+      "id": 10,
+      "name": "Tibère Le Nalinec",
+      "type": "person",
+      "roleDescription": "Stagiaire (2025)",
+      "date": "2025",
+      "description": "Intégré au projet Explaura (partenariat JB-Thiery), Tibère a travaillé sur les notions de placement, le développement et la correction de bugs sur le parcours 'Flore', ainsi que sur les phases de tests utilisateurs.",
+      "img": ""
+    },
+    {
+      "id": 11,
+      "name": "Sasha Daza",
+      "type": "person",
+      "roleDescription": "Étudiant IUT (2022 - 2025)",
+      "date": "2022 - 2025",
+      "description": "Véritable pilier du Charly Lab, Sasha s'est pleinement approprié le lieu et a joué un rôle essentiel dans la création de liens entre les différents étudiants.",
+      "img": ""
+    },
+    {
+      "id": 12,
+      "name": "Anaïs Barrero",
+      "type": "person",
+      "roleDescription": "Étudiante IUT (2021 - 2024)",
+      "date": "2021 - 2024",
+      "description": "Anaïs a contribué à plusieurs projets, notamment par la réalisation d'animations de mascotte utilisant une tenue de motion capture pour les besoins du Chally Lab et de JB-Thiery.",
+      "img": ""
+    },
+    {
+      "id": 13,
+      "name": "Antonin Rousseau & Paul Loisil",
+      "type": "person",
+      "roleDescription": "Étudiants IUT (2020 - 2022)",
+      "date": "2020 - 2022",
+      "description": "Créateurs du gant haptique 'fait maison' du Charly Lab, ils ont transformé un gant de jardinage en un dispositif low-cost utilisant de l'électronique et des fils pour offrir un retour haptique en VR. Ils ont également conçu des ciseaux haptiques sur le même principe.",
+      "img": ""
+    },
+    {
+      "id": 14,
+      "name": "Éva Morere",
+      "type": "person",
+      "roleDescription": "Étudiante IUT (2023 - 2026)",
+      "date": "2023 - 2026",
+      "description": "Très investie, Éva a accompagné le développement du pôle couture du laboratoire. Toujours prête à aider, elle a également présenté les activités de couture lors des JPO de l'IUT.",
+      "img": ""
+    },
+    {
+      "id": 15,
+      "name": "Marc-Olivier Sicx",
+      "type": "person",
+      "roleDescription": "Stagiaire (2026)",
+      "date": "2026",
+      "description": "Marc-Olivier a travaillé sur le kit de communication du Charly Lab destiné aux visiteurs. Il a également accompagné les étudiants dans la réalisation de leurs maquettes et de leur communication.",
+      "img": ""
+    },
+    {
+      "id": 16,
+      "name": "Enzo Ozkan",
+      "type": "person",
+      "roleDescription": "Stagiaire (2021)",
+      "date": "2021",
+      "description": "Enzo a créé une application de piétonisation pour Nancy. À partir de vues à 360°, les habitants pouvaient visualiser et voter pour différents aménagements urbains, apportant une réponse concrète aux attentes citoyennes.",
+      "img": ""
+    },
+    {
+      "id": 17,
+      "name": "Antoine Pollet",
+      "type": "worker",
+      "roleDescription": "Fabmanager (depuis 2019)",
+      "date": "2019",
+      "description": "Responsable du lieu, Antoine accompagne les projets d'envergure comme 'In Memory Of Us' (JO 2024) ou 'Explaura'. Expert en modélisation 3D, il permet également la visualisation de maquettes d'étudiants en réalité augmentée.",
+      "img": ""
+    },
+    {
+      "id": 18,
+      "name": "Laurent Dupont",
+      "type": "founder",
+      "roleDescription": "Co-fondateur",
+      "date": null,
+      "description": "Co-fondateur du Charly Lab, issu de la fusion du Club Multimédia et du Club Bidouille de l'IUT, il est un responsable investi, toujours force de proposition pour des projets innovants.",
+      "img": ""
+    },
+    {
+      "id": 19,
+      "name": "Pierre-André Guénégo",
+      "type": "founder",
+      "roleDescription": "Co-fondateur",
+      "date": null,
+      "description": "Co-fondateur du laboratoire, il porte des projets novateurs tels que le billard robotisé par IA. Tuteur pour les projets électroniques, il est également l'initiateur du projet Vélo.",
+      "img": ""
+    },
+    {
+      "id": 20,
+      "name": "Cyprien Grunblatt",
+      "type": "person",
+      "roleDescription": "Alternant (2022 - 2026)",
+      "date": "2022 - 2026",
+      "description": "Expert en réalité mixte, développement de jeux (Godot) et web 3D, Cyprien a contribué au site web du Charly Lab, au software du projet Vélo et au développement d'Explaura.",
+      "img": ""
+    }
+  ],
+  "partners": [
+    {
+      "id": 1,
+      "name": "Atelier 17.91",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Un acteur clé visant à créer du lien social et à lutter contre l'isolement et la précarité par le développement durable et l'estime de soi.",
+      "img": ""
+    },
+    {
+      "id": 2,
+      "name": "Chopin",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Cité scolaire comprenant un collège et un lycée, proposant des formations d'excellence dans les domaines tertiaires et artistiques.",
+      "img": ""
+    },
+    {
+      "id": 3,
+      "name": "Circuit du coeur au rein",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Association engagée dans le soutien à la recherche clinique sur les maladies cardio-rénales en Lorraine.",
+      "img": ""
+    },
+    {
+      "id": 4,
+      "name": "ICN Business School",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "École de commerce privée de référence située à Nancy.",
+      "img": ""
+    },
+    {
+      "id": 5,
+      "name": "Stéphane Simon",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Artiste plasticien et designer basé à Paris.",
+      "img": ""
+    },
+    {
+      "id": 6,
+      "name": "Loria",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Laboratoire de recherche lorrain spécialisé en informatique et ses applications.",
+      "img": ""
+    },
+    {
+      "id": 7,
+      "name": "Métropole du Grand Nancy",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Institution de la métropole française située dans le département de Meurthe-et-Moselle.",
+      "img": ""
+    },
+    {
+      "id": 8,
+      "name": "JB-Thiery",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Association dédiée à l'accompagnement des personnes en situation de handicap.",
+      "img": ""
+    },
+    {
+      "id": 9,
+      "name": "Run for Alzheimer",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Association de l'IUT Nancy-Charlemagne organisant des courses pour soutenir la lutte contre la maladie d'Alzheimer.",
+      "img": ""
+    },
+    {
+      "id": 10,
+      "name": "Université de Lorraine",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Institution couvrant tous les domaines scientifiques pour l'innovation et l'évolution de la société.",
+      "img": ""
+    },
+    {
+      "id": 11,
+      "name": "Elie Cartan",
+      "type": "partner",
+      "roleDescription": "",
+      "date": null,
+      "description": "Partenaire institutionnel de l'Université de Lorraine.",
+      "img": ""
+    }
+  ],
+  "events_projects": [
+    {
+      "id": 1,
+      "name": "Fabrikathon",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Collaboration avec des chercheurs en mathématiques et informatique pour la création d'objets au sein du Fablab.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 2,
+      "name": "Rencontre Cabinet de la Première Ministre",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Échanges à Matignon concernant le projet In Memory of US.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 3,
+      "name": "Salon Vivatech",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Participation au salon majeur de l'innovation technologique.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 4,
+      "name": "Rencontre Microsoft France",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Exploration d'opportunités de collaboration et d'innovation.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 5,
+      "name": "Rencontre Centre des Monuments Nationaux",
+      "type": "probablement_event",
+      "roleDescription": "",
+      "description": "Discussion sur la préservation du patrimoine culturel et historique.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 6,
+      "name": "Rencontre Louvres Paris",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Exploration d'initiatives culturelles et artistiques.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 7,
+      "name": "Rencontre Tony Estanguet",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Échanges sur les enjeux des JO de Paris 2024 avec le président du COJO.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 8,
+      "name": "Salon e-santé",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Participation au salon clé des innovations en santé numérique.",
+      "date": "2019",
+      "img": ""
+    },
+    {
+      "id": 9,
+      "name": "Exposition VR - Saint Exupéry Reims",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Exposition de réalité virtuelle dédiée à l'héritage de Saint Exupéry.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 10,
+      "name": "Exposition PLEIADES 2022 - Saint Etienne",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Mise en avant des innovations technologiques et artistiques.",
+      "date": "2022",
+      "img": ""
+    },
+    {
+      "id": 11,
+      "name": "Exposition IRréels 2022 - Villeurbanne",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Exploration des frontهما des réel et du virtuel via l'art contemporain.",
+      "date": "2022",
+      "img": ""
+    },
+    {
+      "id": 12,
+      "name": "Exposition Traversée du Marais - Paris",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Immersion dans l'univers de Victor Hugo à la Maison Victor Hugo.",
+      "date": "2024",
+      "img": ""
+    },
+    {
+      "id": 13,
+      "name": "Exposition Musée de la Vieille Charité - Marseille",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Mise en lumière de l'histoire et de la culture régionale à travers l'art.",
+      "date": "2024",
+      "img": ""
+    },
+    {
+      "id": 14,
+      "name": "Atelier VR - Seine-Saint-Denis",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Sensibilisation des élèves aux technologies immersives.",
+      "date": "2024",
+      "img": ""
+    },
+    {
+      "id": 15,
+      "name": "Inauguration App Mobile - Mairie de Nancy",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Lancement de l'application facilitant l'accès aux services municipaux.",
+      "date": "2024",
+      "img": ""
+    },
+    {
+      "id": 16,
+      "name": "Évènement XR - UNYS",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Présentation du projet Explaura.",
+      "date": "2026",
+      "img": ""
+    },
+    {
+      "id": 17,
+      "name": "Projet Vélo",
+      "type": "project",
+      "roleDescription": "",
+      "description": "Utilisation d'un vélo d'appartement modifié pour une immersion VR mondiale.",
+      "date": "2023",
+      "img": ""
+    },
+    {
+      "id": 18,
+      "name": "In Memory of Us",
+      "type": "project",
+      "roleDescription": "",
+      "description": "Expérience immersive mettant en avant le handicap dans le sport.",
+      "date": "2024",
+      "img": ""
+    },
+    {
+      "id": 19,
+      "name": "JBT - Explaura",
+      "type": "project",
+      "roleDescription": "",
+      "description": "Développement d'applications VR pour l'accès à la culture pour les personnes en situation de handicap.",
+      "date": "2024 - 2026",
+      "img": ""
+    },
+    {
+      "id": 20,
+      "name": "BootCamp 2024",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Travaux avec des étudiants américains sur la modélisation d'événements culturels à Nancy.",
+      "date": "2024",
+      "img": ""
+    },
+    {
+      "id": 21,
+      "name": "BootCamp 2025",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Travaux internationaux sur l'inclusion et l'accès à la culture.",
+      "date": "2025",
+      "img": ""
+    }
+  ]
+}
