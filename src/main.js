@@ -4,7 +4,6 @@ import { DRACOLoader } from 'three/examples/jsm/loaders/DRACOLoader.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { TransformControls } from 'three/examples/jsm/controls/TransformControls.js';
 import { UltraHDRLoader } from 'three/examples/jsm/loaders/UltraHDRLoader.js';
-import Stats from 'three/examples/jsm/libs/stats.module.js';
 import { computeBoundsTree, disposeBoundsTree, acceleratedRaycast } from 'three-mesh-bvh';
 import { generateMuseum } from './museum.js';
 
@@ -1970,15 +1969,12 @@ initDB().then(() => {
     switchMap(activeEntry.name, activeEntry.isBuiltin);
 });
 
-const stats = new Stats();
-document.body.appendChild(stats.dom);
 
 // Use a simple timer if Clock/Timer is problematic
 let lastTime = performance.now();
 
 
 function animate() {
-    stats.begin();
     
     updateVRInput();
     updateVRGrab();
@@ -2033,7 +2029,6 @@ function animate() {
     renderer.render(scene, camera);
     if (mixer) mixer.update(delta);
     
-    stats.end();
 }
 renderer.setAnimationLoop(animate);
 
