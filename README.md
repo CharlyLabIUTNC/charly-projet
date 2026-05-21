@@ -1,5 +1,7 @@
 # charly-spatial
 
+We forked this projet from Neirpy to make our own permanent galerie with a code generation and a Json.
+
 This project uses [Vite](https://vitejs.dev/) and [Three.js](https://threejs.org/).
 
 ## Prerequisites
