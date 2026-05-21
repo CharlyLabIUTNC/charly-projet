@@ -404,6 +404,21 @@ function saveMapTransform(name) {
         scale:    { x: map.scale.x,    y: map.scale.y,    z: map.scale.z }
     };
     localStorage.setItem(`mapTransform_${name}`, JSON.stringify(t));
+
+    // If the spawn point is automatic, update it to follow the map's gizmo position
+    const spawnKey = getMapSpawnKey(name);
+    const savedSpawn = localStorage.getItem(spawnKey);
+    if (savedSpawn) {
+        try {
+            const spawnPos = JSON.parse(savedSpawn);
+            if (spawnPos.isAutomatic) {
+                spawnPos.x = map.position.x;
+                spawnPos.y = map.position.y;
+                spawnPos.z = map.position.z;
+                localStorage.setItem(spawnKey, JSON.stringify(spawnPos));
+            }
+        } catch(e) {}
+    }
 }
 function applyMapTransform(name) {
     const saved = localStorage.getItem(`mapTransform_${name}`);
@@ -499,15 +514,20 @@ function switchMap(mapName, isBuiltin = false) {
         }
 
         if (!savedSpawn) {
-            // No spawn point — teleport to origin and enter edit mode
-            teleportTo(0, 0, 0);
-            enterMapEditMode();
-            document.getElementById('map-edit-toast-msg').innerHTML =
-                '🗺️ Bienvenue ! Placez votre map ou déplacez-vous, puis cliquez sur <strong>Set Respawn</strong> pour définir votre point d\'apparition.';
-        } else {
-            const spawnPos = JSON.parse(savedSpawn);
-            teleportTo(spawnPos.x, spawnPos.y, spawnPos.z);
+            // Automatically define spawn point at the origin of the 3D model's gizmo (map.position)
+            const autoSpawn = {
+                x: map.position.x,
+                y: map.position.y,
+                z: map.position.z,
+                isAutomatic: true
+            };
+            localStorage.setItem(spawnKey, JSON.stringify(autoSpawn));
+            savedSpawn = JSON.stringify(autoSpawn);
+            showToast("Point de spawn défini automatiquement à l'origine de la map.");
         }
+
+        const spawnPos = JSON.parse(savedSpawn);
+        teleportTo(spawnPos.x, spawnPos.y, spawnPos.z);
 
         updateMapInventoryUI();
         loadWorld();
