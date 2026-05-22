@@ -52,7 +52,7 @@ export async function generateMuseum(mapScene, gltfLoader) {
         const ctx = canvas.getContext('2d');
         ctx.fillStyle = 'rgba(0,0,0,0)'; // transparent
         ctx.clearRect(0, 0, 512, 512);
-        ctx.fillStyle = '#000000';
+        ctx.fillStyle = '#ffffff';
         ctx.font = 'bold 160px "Now", "Futura", "Century Gothic", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
@@ -94,11 +94,31 @@ export async function generateMuseum(mapScene, gltfLoader) {
         ctx.fillText(line, 30, y);
         y += 40;
         
-        // Date
-        if (item.date) {
+        // Subtitle (Date or Role)
+        let subtitle = '';
+        if ((item.type === 'person' || item.type === 'founder' || item.type === 'worker') && item.roleDescription) {
+            subtitle = item.roleDescription;
+        } else if (item.date) {
+            subtitle = item.date;
+        }
+
+        if (subtitle) {
             ctx.font = 'italic 24px Arial';
             ctx.fillStyle = '#555';
-            ctx.fillText(item.date, 30, y);
+            
+            const subWords = subtitle.split(' ');
+            let subLine = '';
+            for(let n = 0; n < subWords.length; n++) {
+                const testLine = subLine + subWords[n] + ' ';
+                if (ctx.measureText(testLine).width > 450 && n > 0) {
+                    ctx.fillText(subLine, 30, y);
+                    subLine = subWords[n] + ' ';
+                    y += 30;
+                } else {
+                    subLine = testLine;
+                }
+            }
+            ctx.fillText(subLine, 30, y);
             y += 35;
         }
         
@@ -127,7 +147,7 @@ export async function generateMuseum(mapScene, gltfLoader) {
         return tex;
     };
 
-    const createPlaceholderCanvas = () => {
+    const createPlaceholderCanvas = (title) => {
         const canvas = document.createElement('canvas');
         canvas.width = 512;
         canvas.height = 512;
@@ -138,7 +158,22 @@ export async function generateMuseum(mapScene, gltfLoader) {
         ctx.font = '30px Now, "Futura", "Century Gothic", sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Image', 256, 256);
+        
+        const words = (title || 'Image').split(' ');
+        let line = '';
+        let y = 256 - (words.length > 3 ? 20 : 0);
+        for(let n = 0; n < words.length; n++) {
+            const testLine = line + words[n] + ' ';
+            if (ctx.measureText(testLine).width > 450 && n > 0) {
+                ctx.fillText(line, 256, y);
+                line = words[n] + ' ';
+                y += 40;
+            } else {
+                line = testLine;
+            }
+        }
+        ctx.fillText(line, 256, y);
+        
         const tex = new THREE.CanvasTexture(canvas);
         tex.colorSpace = THREE.SRGBColorSpace;
         return tex;
@@ -182,44 +217,63 @@ export async function generateMuseum(mapScene, gltfLoader) {
     
     museumGroup.add(sasWallF1, sasWallB1, sasWallB2);
     
-    // Panneau de Bienvenue (Minecraft Style)
+    // Panneau de Bienvenue (Banderole Suspendue Art Déco)
     const welcomeSignGroup = new THREE.Group();
-    // Placé près de l'entrée, légèrement sur la gauche
-    welcomeSignGroup.position.set(sasCenter.x - sasWidth/2 + 12, sasCenter.y, sasCenter.z - sasLength/2 + 12);
+    // Placée en hauteur, centrée, juste avant la galerie (à l'entrée du Sas)
+    welcomeSignGroup.position.set(sasCenter.x, sasCenter.y + 3.2, sasCenter.z - sasLength/2 + 14.0);
     
-    const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
-    const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.4, 0.1), woodMat);
-    post.position.y = 0.7;
-    welcomeSignGroup.add(post);
+    const metalMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.2 });
+    const panelMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, metalness: 0.1, roughness: 0.1 });
     
-    const board = new THREE.Mesh(new THREE.BoxGeometry(3.0, 1.2, 0.1), woodMat);
-    board.position.y = 1.6;
+    const finialL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), metalMat);
+    finialL.position.set(-2.2, 0.25, 0);
+    const finialR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), metalMat);
+    finialR.position.set(2.2, 0.25, 0);
+    
+    // Barre horizontale de maintien (sans les chaînes verticales)
+    const topBar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 8.6, 16), metalMat);
+    topBar.rotation.z = Math.PI / 2;
+    topBar.position.y = 0.25;
+    
+    welcomeSignGroup.add(finialL, finialR, topBar);
+    
+    // Banderole centrale
+    const board = new THREE.Mesh(new THREE.BoxGeometry(4.4, 1.2, 0.05), panelMat);
+    board.position.y = -0.35;
     welcomeSignGroup.add(board);
     
     const welcomeCanvas = document.createElement('canvas');
-    welcomeCanvas.width = 1024;
-    welcomeCanvas.height = 512;
+    welcomeCanvas.width = 1200; // Plus large pour la banderole
+    welcomeCanvas.height = 327; // Ratio adapté 4.4 / 1.2
     const ctx = welcomeCanvas.getContext('2d');
-    ctx.fillStyle = '#8b5a2b'; 
-    ctx.fillRect(0, 0, 1024, 512);
-    ctx.fillStyle = '#ffffff';
-    ctx.font = 'bold 50px "Now", "Futura", "Century Gothic", sans-serif';
+    
+    ctx.fillStyle = '#fafafa'; 
+    ctx.fillRect(0, 0, 1200, 327);
+    
+    ctx.strokeStyle = '#d4af37';
+    ctx.lineWidth = 8;
+    ctx.strokeRect(15, 15, 1170, 297);
+    ctx.lineWidth = 3;
+    ctx.strokeRect(30, 30, 1140, 267);
+    
+    ctx.fillStyle = '#222222';
+    ctx.font = 'normal 65px "Garamond", "Times New Roman", serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillText('Le Charly Lab', 512, 100);
-    ctx.font = '36px "Now", "Futura", "Century Gothic", sans-serif';
-    ctx.fillText('ne serait rien sans ses projets', 512, 220);
-    ctx.fillText('et les investissements de', 512, 300);
-    ctx.fillText('ses étudiants.', 512, 380);
+    ctx.fillText('LE CHARLY LAB', 600, 100);
+    
+    ctx.font = 'italic 34px "Garamond", "Times New Roman", serif';
+    ctx.fillStyle = '#444444';
+    ctx.fillText('Ne serait rien sans ses projets et les travaux des étudiants.', 600, 210);
     
     const welcomeTex = new THREE.CanvasTexture(welcomeCanvas);
     welcomeTex.colorSpace = THREE.SRGBColorSpace;
-    const welcomePlane = new THREE.Mesh(new THREE.PlaneGeometry(2.8, 1.0), new THREE.MeshBasicMaterial({ map: welcomeTex }));
-    welcomePlane.position.y = 1.6;
-    welcomePlane.position.z = 0.051;
+    const welcomePlane = new THREE.Mesh(new THREE.PlaneGeometry(4.4, 1.2), new THREE.MeshBasicMaterial({ map: welcomeTex }));
+    welcomePlane.position.y = -0.35;
+    welcomePlane.position.z = 0.026;
     welcomeSignGroup.add(welcomePlane);
     
-    // Le panneau regarde vers l'entrée (-Z), très légèrement tourné vers le centre
+    // Regarde vers l'entrée du Sas
     welcomeSignGroup.rotation.y = Math.PI;
     museumGroup.add(welcomeSignGroup);
     
@@ -339,13 +393,83 @@ export async function generateMuseum(mapScene, gltfLoader) {
     }
     
     // 5. Generate geometry from path
-    // ffadad, ffd6a5,fdffb6,caffbf,9bf6ff, a0c4ff,bdb2ff, ffc6ff, fffffc
-    const yearColors = [0xffadad, 0xffd6a5, 0xfdffb6, 0xcaffbf, 0x9bf6ff, 0xa0c4ff, 0xbdb2ff, 0xffc6ff, 0xfffffc];
+    // Couleurs florales pastels (vieux rose, vert sauge, lilas, etc.)
+    const yearColors = [0xe8d5c4, 0xc1d3c0, 0xebd4d4, 0xdbe3e5, 0xe4d4e8, 0xdfe8d5, 0xf2e4c9, 0xd5c4e8, 0xe8e8d5];
     let currentColorIndex = 0;
+    
+    const createWallpaperTex = (colorHex) => {
+        const canvas = document.createElement('canvas');
+        canvas.width = 1024;
+        canvas.height = 1024;
+        const ctx = canvas.getContext('2d');
+        
+        ctx.fillStyle = '#' + colorHex.toString(16).padStart(6, '0');
+        ctx.fillRect(0, 0, 1024, 1024);
+        
+        // Motifs floraux (Art Nouveau) en transparence
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.4)';
+        ctx.lineWidth = 5;
+        for (let i = 0; i < 4; i++) {
+            for (let j = 0; j < 4; j++) {
+                const cx = (i * 256) + 128;
+                const cy = (j * 256) + 128;
+                
+                ctx.beginPath();
+                for(let a = 0; a < Math.PI * 2; a += Math.PI / 2) {
+                    ctx.moveTo(cx, cy);
+                    ctx.bezierCurveTo(
+                        cx + Math.cos(a - 0.4) * 80, cy + Math.sin(a - 0.4) * 80,
+                        cx + Math.cos(a + 0.4) * 80, cy + Math.sin(a + 0.4) * 80,
+                        cx + Math.cos(a) * 110, cy + Math.sin(a) * 110
+                    );
+                }
+                ctx.stroke();
+                
+                ctx.beginPath();
+                ctx.arc(cx, cy, 15, 0, Math.PI * 2);
+                ctx.fillStyle = 'rgba(212, 175, 55, 0.3)'; // Centre doré subtil
+                ctx.fill();
+            }
+        }
+        
+        // Soubassement boiserie (wainscoting) blanc pur
+        ctx.fillStyle = '#fafafa';
+        ctx.fillRect(0, 1024 * 0.7, 1024, 1024 * 0.3);
+        
+        // Liseré ou moulure dorée
+        ctx.fillStyle = '#d4af37'; 
+        ctx.fillRect(0, 1024 * 0.68, 1024, 1024 * 0.02);
+        
+        // Plinthe épaisse au sol
+        ctx.fillStyle = '#e0e0e0';
+        ctx.fillRect(0, 1024 * 0.92, 1024, 1024 * 0.08);
+
+        // Détails de moulures sur la boiserie (caissons)
+        ctx.strokeStyle = '#e0e0e0';
+        ctx.lineWidth = 4;
+        for (let i = 0; i < 3; i++) {
+            ctx.strokeRect((i * 341) + 40, 1024 * 0.74, 261, 1024 * 0.14);
+        }
+
+        const tex = new THREE.CanvasTexture(canvas);
+        tex.wrapS = THREE.RepeatWrapping;
+        tex.wrapT = THREE.RepeatWrapping;
+        tex.repeat.set(3, 1); // Répète le motif sur la largeur du mur
+        tex.colorSpace = THREE.SRGBColorSpace;
+        return tex;
+    };
+
+    // Génère les matériaux à l'avance pour la galerie
+    const wallMaterials = yearColors.map(c => new THREE.MeshStandardMaterial({
+        map: createWallpaperTex(c),
+        roughness: 0.8,
+        metalness: 0.05
+    }));
     
     const solGeo = new THREE.BoxGeometry(size.x, 0.2, size.z);
     const wallGeo = new THREE.BoxGeometry(size.x, size.y, 0.2);
-    const pillarGeo = new THREE.BoxGeometry(0.4, size.y, 0.4);
+    // Légèrement plus grand (0.45) et un peu plus haut pour éviter tout z-fighting avec les murs
+    const pillarGeo = new THREE.BoxGeometry(0.45, size.y + 0.05, 0.45);
     
     // Mixers array to hold all avatar animations if needed
     const mixers = [];
@@ -365,45 +489,63 @@ export async function generateMuseum(mapScene, gltfLoader) {
         const cz = cell.pos.z;
         const cy = cell.pos.y;
         
-        // Panneau Minecraft pour les partenaires (case vide du début)
+        // Banderole suspendue pour les partenaires (case vide du début)
         if (i === 0) {
             const signGroup = new THREE.Group();
-            signGroup.position.set(cx, cy, cz);
+            // Placée en hauteur, centrée dans le couloir
+            signGroup.position.set(cx, cy + 3.2, cz+1.2);
             
-            const woodMat = new THREE.MeshStandardMaterial({ color: 0x5c4033 });
-            const post = new THREE.Mesh(new THREE.BoxGeometry(0.1, 1.4, 0.1), woodMat);
-            post.position.y = 0.7;
-            signGroup.add(post);
+            const metalMat = new THREE.MeshStandardMaterial({ color: 0xd4af37, metalness: 0.8, roughness: 0.2 });
+            const panelMat = new THREE.MeshStandardMaterial({ color: 0xf5f5f5, metalness: 0.1, roughness: 0.1 });
             
-            const board = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.6, 0.1), woodMat);
-            board.position.y = 1.4;
+            const finialL = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), metalMat);
+            finialL.position.set(-1.8, 0.25, 0);
+            const finialR = new THREE.Mesh(new THREE.SphereGeometry(0.05, 16, 16), metalMat);
+            finialR.position.set(1.8, 0.25, 0);
+            
+            // Barre horizontale de maintien
+            const topBar = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 6.5, 16), metalMat);
+            topBar.rotation.z = Math.PI / 2;
+            topBar.position.y = 0.25;
+            
+            signGroup.add(finialL, finialR, topBar);
+            
+            // Banderole centrale
+            const board = new THREE.Mesh(new THREE.BoxGeometry(3.6, 1.0, 0.05), panelMat);
+            board.position.y = -0.3;
             signGroup.add(board);
             
             const mcSignCanvas = document.createElement('canvas');
-            mcSignCanvas.width = 1024;
-            mcSignCanvas.height = 384;
+            mcSignCanvas.width = 1080;
+            mcSignCanvas.height = 300; // ratio 3.6 / 1.0
             const ctx = mcSignCanvas.getContext('2d');
-            ctx.fillStyle = '#8b5a2b'; 
-            ctx.fillRect(0, 0, 1024, 384);
-            ctx.fillStyle = '#ffffff';
-            ctx.font = 'bold 70px "Now", "Futura", "Century Gothic", sans-serif';
+            
+            ctx.fillStyle = '#fafafa'; 
+            ctx.fillRect(0, 0, 1080, 300);
+            
+            ctx.strokeStyle = '#d4af37';
+            ctx.lineWidth = 10;
+            ctx.strokeRect(15, 15, 1050, 270);
+            ctx.lineWidth = 3;
+            ctx.strokeRect(30, 30, 1020, 240);
+            
+            ctx.fillStyle = '#222222';
+            ctx.font = 'normal 65px "Garamond", "Times New Roman", serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
-            ctx.fillText('Ils nous font', 512, 140);
-            ctx.fillText('confiance', 512, 240);
+            ctx.fillText('ILS NOUS FONT CONFIANCE', 540, 150);
             
             const mcSignTex = new THREE.CanvasTexture(mcSignCanvas);
             mcSignTex.colorSpace = THREE.SRGBColorSpace;
-            const mcPlane = new THREE.Mesh(new THREE.PlaneGeometry(1.6, 0.6), new THREE.MeshBasicMaterial({ map: mcSignTex }));
-            mcPlane.position.y = 1.4;
-            mcPlane.position.z = 0.051;
+            const mcPlane = new THREE.Mesh(new THREE.PlaneGeometry(3.6, 1.0), new THREE.MeshBasicMaterial({ map: mcSignTex }));
+            mcPlane.position.y = -0.3;
+            mcPlane.position.z = 0.026;
             signGroup.add(mcPlane);
             
-            // Décalage vers la gauche et recul dans le couloir (plus loin de l'entrée)
-            const rightVec = new THREE.Vector3(-cell.dir.z, 0, cell.dir.x);
-            signGroup.position.addScaledVector(rightVec, -2);
+            // Avance légèrement dans le couloir pour la visibilité
             signGroup.position.addScaledVector(cell.dir, 1.8);
             
+            // Fait face au visiteur entrant
             signGroup.rotation.y = Math.atan2(cell.dir.x, cell.dir.z) + Math.PI;
             museumGroup.add(signGroup);
         }
@@ -427,9 +569,9 @@ export async function generateMuseum(mapScene, gltfLoader) {
             museumGroup.add(yearPlane);
         }
         
-        const roomColor = yearColors[currentColorIndex];
-        const roomMat = new THREE.MeshStandardMaterial({ color: roomColor });
-        const solMat = new THREE.MeshStandardMaterial({ color: 0xcccccc });
+        const roomMat = wallMaterials[currentColorIndex];
+        // Sol élégant (style marbre foncé / granit poli) pour contraster les murs
+        const solMat = new THREE.MeshStandardMaterial({ color: 0x2d2b2a, roughness: 0.3, metalness: 0.1 });
         
         // Floor
         const sol = new THREE.Mesh(solGeo, solMat);
@@ -536,20 +678,60 @@ export async function generateMuseum(mapScene, gltfLoader) {
                 proxy.userData.isCollisionProxy = true;
                 itemGroup.add(proxy);
             } else {
-                const frameGeo = new THREE.BoxGeometry(2, 2, 0.1);
-                const frameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
-                const frame = new THREE.Mesh(frameGeo, frameMat);
-                frame.position.y = 1.5;
-                
-                const tex = createPlaceholderCanvas();
-                const planeGeo = new THREE.PlaneGeometry(1.8, 1.8);
-                const planeMat = new THREE.MeshBasicMaterial({ map: tex });
-                const plane = new THREE.Mesh(planeGeo, planeMat);
-                plane.position.y = 1.5;
-                plane.position.z = 0.06; // slightly outside the frame
                 const frameGroup = new THREE.Group();
-                frameGroup.add(frame, plane);
                 frameGroup.rotation.y = rotY;
+                
+                if (cell.item.img && cell.item.img.trim() !== '') {
+                    const frameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+                    const frame = new THREE.Mesh(new THREE.BoxGeometry(2, 2, 0.1), frameMat);
+                    frame.position.y = 1.5;
+                    
+                    const planeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+                    const plane = new THREE.Mesh(new THREE.PlaneGeometry(1.8, 1.8), planeMat);
+                    plane.position.y = 1.5;
+                    plane.position.z = 0.06;
+                    
+                    frameGroup.add(frame, plane);
+                    
+                    const tl = new THREE.TextureLoader();
+                    const imgUrl = cell.item.img.startsWith('./') ? cell.item.img.replace('./', '/') : cell.item.img;
+                    tl.load(imgUrl, (texture) => {
+                        const imgWidth = texture.image.width;
+                        const imgHeight = texture.image.height;
+                        const aspect = imgWidth / imgHeight;
+                        
+                        let width = 1.8;
+                        let height = 1.8;
+                        if (aspect > 1) {
+                            height = width / aspect;
+                        } else {
+                            width = height * aspect;
+                        }
+                        
+                        plane.geometry.dispose();
+                        plane.geometry = new THREE.PlaneGeometry(width, height);
+                        plane.material.map = texture;
+                        plane.material.color.setHex(0xffffff);
+                        plane.material.needsUpdate = true;
+                        
+                        frame.geometry.dispose();
+                        frame.geometry = new THREE.BoxGeometry(width + 0.2, height + 0.2, 0.1);
+                    });
+                } else {
+                    const frameGeo = new THREE.BoxGeometry(2, 2, 0.1);
+                    const frameMat = new THREE.MeshStandardMaterial({ color: 0x8b5a2b });
+                    const frame = new THREE.Mesh(frameGeo, frameMat);
+                    frame.position.y = 1.5;
+                    
+                    const tex = createPlaceholderCanvas(cell.item.name);
+                    const planeGeo = new THREE.PlaneGeometry(1.8, 1.8);
+                    const planeMat = new THREE.MeshBasicMaterial({ map: tex });
+                    const plane = new THREE.Mesh(planeGeo, planeMat);
+                    plane.position.y = 1.5;
+                    plane.position.z = 0.06; // slightly outside the frame
+                    
+                    frameGroup.add(frame, plane);
+                }
                 
                 itemGroup.add(frameGroup);
             }

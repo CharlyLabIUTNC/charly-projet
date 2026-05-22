@@ -96,7 +96,7 @@
       "type": "person",
       "roleDescription": "Étudiant IUT (2022 - 2025)",
       "date": "2022 - 2025",
-      "description": "Véritable pilier du Charly Lab, Sasha s'est pleinement approprié le lieu et a joué un rôle essentiel dans la création de liens entre les différents étudiants.",
+      "description": "Éternel squatter du Charly Lab, Sasha s'est pleinement approprié le lieu et a joué un rôle essentiel dans la création de liens entre les différents étudiants.",
       "img": ""
     },
     {
@@ -150,7 +150,7 @@
       "type": "worker",
       "roleDescription": "Fabmanager (depuis 2019)",
       "date": "2019",
-      "description": "Responsable du lieu, Antoine accompagne les projets d'envergure comme 'In Memory Of Us' (JO 2024) ou 'Explaura'. Expert en modélisation 3D, il permet également la visualisation de maquettes d'étudiants en réalité augmentée.",
+      "description": "Fabmanager du lieu, Antoine accompagne les projets d'envergure comme 'In Memory Of Us' (JO 2024) ou 'Explaura'. Expert en modélisation 3D, il permet également la visualisation de maquettes d'étudiants en réalité augmentée.",
       "img": ""
     },
     {
@@ -159,7 +159,7 @@
       "type": "founder",
       "roleDescription": "Co-fondateur",
       "date": null,
-      "description": "Co-fondateur du Charly Lab, issu de la fusion du Club Multimédia et du Club Bidouille de l'IUT, il est un responsable investi, toujours force de proposition pour des projets innovants.",
+      "description": "Responsable du lieu et co-fondateur du Charly Lab, issu de la fusion du Club Multimédia et du Club Bidouille de l'IUT, il est un responsable investi, toujours force de proposition pour des projets innovants.",
       "img": ""
     },
     {
@@ -175,9 +175,9 @@
       "id": 20,
       "name": "Cyprien Grunblatt",
       "type": "person",
-      "roleDescription": "Alternant (2022 - 2026)",
-      "date": "2022 - 2026",
-      "description": "Expert en réalité mixte, développement de jeux (Godot) et web 3D, Cyprien a contribué au site web du Charly Lab, au software du projet Vélo et au développement d'Explaura.",
+      "roleDescription": "Etudiant (2020-2022) - Stagiaire (2021) - Alternant (2021 - 2026)",
+      "date": "2020 - 2026",
+      "description": "L'éternel alternant du Charly Lab, Cyprien est devenu un expert en réalité mixte, développement de jeux (Godot) et web 3D. Il a contribué au site web du Charly Lab, au software du projet Vélo et au développement d'Explaura.",
       "img": ""
     }
   ],
@@ -189,16 +189,16 @@
       "roleDescription": "",
       "date": null,
       "description": "Un acteur clé visant à créer du lien social et à lutter contre l'isolement et la précarité par le développement durable et l'estime de soi.",
-      "img": ""
+      "img": "./images/atelier1791.png"
     },
     {
       "id": 2,
-      "name": "Chopin",
+      "name": "Lycée Chopin",
       "type": "partner",
       "roleDescription": "",
       "date": null,
       "description": "Cité scolaire comprenant un collège et un lycée, proposant des formations d'excellence dans les domaines tertiaires et artistiques.",
-      "img": ""
+      "img": "./images/chopin.jpeg"
     },
     {
       "id": 3,
@@ -207,7 +207,7 @@
       "roleDescription": "",
       "date": null,
       "description": "Association engagée dans le soutien à la recherche clinique sur les maladies cardio-rénales en Lorraine.",
-      "img": ""
+      "img": "./images/coeuraurein.jpeg"
     },
     {
       "id": 4,
@@ -216,7 +216,7 @@
       "roleDescription": "",
       "date": null,
       "description": "École de commerce privée de référence située à Nancy.",
-      "img": ""
+      "img": "./images/icn.png"
     },
     {
       "id": 5,
@@ -225,7 +225,7 @@
       "roleDescription": "",
       "date": null,
       "description": "Artiste plasticien et designer basé à Paris.",
-      "img": ""
+      "img": "./images/stephane_simon.jpeg"
     },
     {
       "id": 6,
@@ -234,7 +234,7 @@
       "roleDescription": "",
       "date": null,
       "description": "Laboratoire de recherche lorrain spécialisé en informatique et ses applications.",
-      "img": ""
+      "img": "./images/loria.jpeg"
     },
     {
       "id": 7,
@@ -243,7 +243,7 @@
       "roleDescription": "",
       "date": null,
       "description": "Institution de la métropole française située dans le département de Meurthe-et-Moselle.",
-      "img": ""
+      "img": "./images/nancy.png"
     },
     {
       "id": 8,
@@ -252,7 +252,7 @@
       "roleDescription": "",
       "date": null,
       "description": "Association dédiée à l'accompagnement des personnes en situation de handicap.",
-      "img": ""
+      "img": "./images/jbthiery.png"
     },
     {
       "id": 9,
@@ -261,7 +261,7 @@
       "roleDescription": "",
       "date": null,
       "description": "Association de l'IUT Nancy-Charlemagne organisant des courses pour soutenir la lutte contre la maladie d'Alzheimer.",
-      "img": ""
+      "img": "./images/runforalzheimer.png"
     },
     {
       "id": 10,
@@ -270,16 +270,16 @@
       "roleDescription": "",
       "date": null,
       "description": "Institution couvrant tous les domaines scientifiques pour l'innovation et l'évolution de la société.",
-      "img": ""
+      "img": "./images/ul.png"
     },
     {
       "id": 11,
-      "name": "Elie Cartan",
+      "name": "Institut Elie Cartan",
       "type": "partner",
       "roleDescription": "",
       "date": null,
       "description": "Partenaire institutionnel de l'Université de Lorraine.",
-      "img": ""
+      "img": "./images/iecl.png"
     }
   ],
   "events_projects": [
@@ -290,7 +290,7 @@
       "roleDescription": "",
       "description": "Collaboration avec des chercheurs en mathématiques et informatique pour la création d'objets au sein du Fablab.",
       "date": "2023",
-      "img": ""
+      "img": "./images/fabrikathon.jpeg"
     },
     {
       "id": 2,
@@ -299,7 +299,7 @@
       "roleDescription": "",
       "description": "Échanges à Matignon concernant le projet In Memory of US.",
       "date": "2023",
-      "img": ""
+      "img": "./images/matignon.png"
     },
     {
       "id": 3,
@@ -308,7 +308,7 @@
       "roleDescription": "",
       "description": "Participation au salon majeur de l'innovation technologique.",
       "date": "2023",
-      "img": ""
+      "img": "./images/vivatech.jpeg"
     },
     {
       "id": 4,
@@ -322,7 +322,7 @@
     {
       "id": 5,
       "name": "Rencontre Centre des Monuments Nationaux",
-      "type": "probablement_event",
+      "type": "event",
       "roleDescription": "",
       "description": "Discussion sur la préservation du patrimoine culturel et historique.",
       "date": "2023",
@@ -378,7 +378,7 @@
       "name": "Exposition IRréels 2022 - Villeurbanne",
       "type": "event",
       "roleDescription": "",
-      "description": "Exploration des frontهما des réel et du virtuel via l'art contemporain.",
+      "description": "Exploration des frontières du réel et du virtuel via l'art contemporain.",
       "date": "2022",
       "img": ""
     },
@@ -423,7 +423,7 @@
       "name": "Évènement XR - UNYS",
       "type": "event",
       "roleDescription": "",
-      "description": "Présentation du projet Explaura.",
+      "description": "Présentation du projet Explaura durant une conférence UNYS sur la réalité étendue.",
       "date": "2026",
       "img": ""
     },
@@ -432,9 +432,9 @@
       "name": "Projet Vélo",
       "type": "project",
       "roleDescription": "",
-      "description": "Utilisation d'un vélo d'appartement modifié pour une immersion VR mondiale.",
+      "description": "Utilisation d'un vélo d'appartement modifié pour une immersion VR mondiale avec les API de Google Earth sur le web et Unreal Engine 5.",
       "date": "2023",
-      "img": ""
+      "img": "./images/projetvelo.jpeg"
     },
     {
       "id": 18,
@@ -443,34 +443,70 @@
       "roleDescription": "",
       "description": "Expérience immersive mettant en avant le handicap dans le sport.",
       "date": "2024",
-      "img": ""
+      "img": "./images/imou.png"
     },
     {
       "id": 19,
       "name": "JBT - Explaura",
       "type": "project",
       "roleDescription": "",
-      "description": "Développement d'applications VR pour l'accès à la culture pour les personnes en situation de handicap.",
+      "description": "Développement d'une application MR afin de faciliter l'accès à la culture pour des personnes en situation de handicap au sein du musée de l'École de Nancy.",
       "date": "2024 - 2026",
-      "img": ""
+      "img": "./images/explaura.jpeg"
     },
     {
       "id": 20,
       "name": "BootCamp 2024",
       "type": "event",
       "roleDescription": "",
-      "description": "Travaux avec des étudiants américains sur la modélisation d'événements culturels à Nancy.",
+      "description": "Travaux avec des étudiants américains sur la modélisation d'événements culturels à Nancy. Notamment en produisant des jumeaux numériques améliorés de quartier de Nancy.",
       "date": "2024",
-      "img": ""
+      "img": "/images/bootcamp2024.jpeg"
     },
     {
       "id": 21,
       "name": "BootCamp 2025",
       "type": "event",
       "roleDescription": "",
-      "description": "Travaux internationaux sur l'inclusion et l'accès à la culture.",
+      "description": "Travaux internationaux sur l'inclusion et l'accès à la culture en proposant des ateliers créatifs pour des personnes en situation de handicap autour de l'art nouveau.",
       "date": "2025",
-      "img": ""
+      "img": "./images/bootcamp2025.jpeg"
+    },
+    {
+      "id": 22,
+      "name": "Foire expo 2023",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Présentation des machines et des différentes productions et également du projet In Memory of Us du Charly Lab.",
+      "date": "2023",
+      "img": "./images/foire2023.jpeg"
+    },
+    {
+      "id": 23,
+      "name": "Foire expo 2024",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Présentation d'un stand dans un style de kermesse pour mettre en avant les productions possibles au sein du Charly Lab.",
+      "date": "2024",
+      "img": "./images/foire2024.jpeg"
+    },
+    {
+      "id": 24,
+      "name": "Foire expo 2025",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Présentation des projets et innovations notamment du projet Explaura du Charly Lab.",
+      "date": "2025",
+      "img": "./images/foire2025.jpeg"
+    },
+    {
+      "id": 25,
+      "name": "Foire expo 2026",
+      "type": "event",
+      "roleDescription": "",
+      "description": "Présentation de notre projet Explaura et utilisation de notre kit de communication pour faire découvrir le Charly Lab au grand public.",
+      "date": "2026",
+      "img": "./images/foire2026.jpeg"
     }
   ]
 }
